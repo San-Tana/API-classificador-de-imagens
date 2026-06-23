@@ -1,5 +1,3 @@
-# API-classificador-de-imagens
-
 <div align="center">
 <h1>
 
@@ -11,27 +9,24 @@
 - [Introdução](#introdução)
 - [Requisitos Principais](#requisitos-principais)
   - [Entrada e Saída](#entrada-e-saída)
-  - [Interface MMIO com o Coprocessador](#interface-mmio-com-o-coprocessador)
-  - [Conjunto de Instruções (ISA)](#conjunto-de-instruções-isa)
-  - [Arquivos Binários de Entrada](#arquivos-binários-de-entrada)
+  - [Os Três Modos de Operação](#os-três-modos-de-operação)
+  - [Interface MMIO com o Controlador VGA](#interface-mmio-com-o-controlador-vga)
+  - [Arquivos de Entrada](#arquivos-de-entrada)
 - [Fundamentação Teórica](#fundamentação-teórica)
-  - [Mapeamento de Memória (MMIO)](#mapeamento-de-memória-mmio)
-  - [System Calls Linux em Assembly ARM](#system-calls-linux-em-assembly-arm)
-  - [Representação em Ponto Fixo Q4.12](#representação-em-ponto-fixo-q412)
-  - [Protocolo de Comunicação com o Coprocessador](#protocolo-de-comunicação-com-o-coprocessador)
-  - [Interworking Thumb–ARM](#interworking-thumbarm)
-- [Metodologia](#Metodologia)
+  - [Integração do Controlador VGA](#integração-do-controlador-vga)
+  - [Exibição da Imagem na Tela](#exibição-da-imagem-na-tela)
+  - [Leitura do Mouse no Linux](#leitura-do-mouse-no-linux)
+  - [Acesso MMIO pela Linguagem C](#acesso-mmio-pela-linguagem-c)
+  - [Decodificação de PNG com stb_image](#decodificação-de-png-com-stb_image)
+- [Metodologia](#metodologia)
 - [Descrição da Solução](#descrição-da-solução)
-  - [Arquitetura Geral do Driver](#arquitetura-geral-do-driver)
-  - [mapear_fpga](#mapear_fpga)
-  - [carregar_arquivo](#carregar_arquivo)
-  - [enviar_instrucao e enviar_instrucao_sem_done](#enviar_instrucao-e-enviar_instrucao_sem_done)
-  - [enviar_bias, enviar_beta, enviar_img](#enviar_bias-enviar_beta-enviar_img)
-  - [enviar_peso](#enviar_peso)
-  - [iniciar_inferencia](#iniciar_inferencia)
-  - [reset_coprocessador](#reset_coprocessador)
-  - [Header driver.h](#header-driverh)
-  - [Aplicação em C — main.c](#aplicação-em-c--mainc)
+  - [Arquitetura Geral da Aplicação](#arquitetura-geral-da-aplicação)
+  - [Primitivas de Desenho no VGA](#primitivas-de-desenho-no-vga)
+  - [Modo 1 — Inferência a Partir de Arquivo](#modo-1--inferência-a-partir-de-arquivo)
+  - [Modo 2 — Desenho com o Mouse](#modo-2--desenho-com-o-mouse)
+  - [Modo 3 — Benchmark](#modo-3--benchmark)
+  - [Filtro de Blur](#filtro-de-blur)
+  - [Inicialização e Menu](#inicialização-e-menu)
 - [Modo de Uso](#modo-de-uso)
   - [Estrutura de Diretórios](#estrutura-de-diretórios)
   - [Compilação](#compilação)
@@ -51,9 +46,9 @@
 </h1>
 </div>
 
-  Este documento descreve o desenvolvimento do Marco 2 de um sistema embarcado para classificação de dígitos numéricos. O sistema completo combina um coprocessador implementado em Verilog na FPGA Cyclone V da placa DE1-SoC, desenvolvido no Marco 1, com um driver em linguagem Assembly ARMv7 executado no processador ARM (HPS) sob Linux, integrado a uma aplicação em C. O coprocessador base para o driver em questão foi projetado por Maike de Oliveira, seu repositório original pode ser encontrado em: github.com/DestinyWolf/Problema_SD_2026_1 e é recomendado para aqueles que queiram se aprofundar no funcionamento do coprocessador. Entretanto, algumas alterações foram feitas para que o driver fosse capaz de se conectar a ele. O modelo alterado esta disponível neste repositório no diretório `coprocessador/`.
+  Este documento descreve o desenvolvimento do Marco 3 de um sistema embarcado para classificação de dígitos numéricos manuscritos, executado na placa DE1-SoC, um SoC heterogêneo que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual a aplicação que o usuário de fato utiliza é construída, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2). O controlador VGA utilizado para a exibição das imagens foi disponibilizado por Maike de Oliveira, e seu repositório original pode ser encontrado em: github.com/DestinyWolf/Problema_SD_2026_1.
 
-  O objetivo do Marco 2 é desenvolver o driver responsável por toda a comunicação entre o processador ARM e o coprocessador na FPGA, além de uma interface de programação de aplicações (API) em C que controla o fluxo de inferência. O driver é implementado como uma biblioteca de funções em Assembly ARMv7, chamadas diretamente pelo programa C. Ele carrega os parâmetros da rede neural a partir de arquivos binários no disco, os envia ao coprocessador via MMIO, dispara a inferência e retorna o dígito predito.
+  O objetivo do Marco 3 é desenvolver uma aplicação em linguagem C que ofereça três modos de operação ao usuário: a classificação de uma imagem a partir de um arquivo, a classificação de um dígito desenhado na tela com o auxílio de um mouse, e um modo de validação em lote que computa métricas de acurácia e desempenho. Um requisito importante deste marco é que o driver do Marco 2 fosse mantido sem nenhuma alteração, responsável apenas pelo coprocessador ELM. Por essa razão, todo o controle do controlador VGA e a leitura do mouse foram implementados diretamente na aplicação em C.
 
 <div align="center">
 <h1>
@@ -65,47 +60,40 @@
 
 ### Entrada e Saída
 
-O sistema recebe como entrada quatro arquivos binários localizados no diretório `data/`, contendo os parâmetros da rede neural ELM e as imagens a serem classificadas. A saída é o dígito predito (0 a 9), retornado como valor inteiro pela função `iniciar_inferencia` e impresso pelo programa `main.c`.
+A entrada do sistema é uma imagem de 28×28 pixels em escala de cinza, que pode vir de um arquivo PNG no disco ou de um desenho feito pelo usuário com o mouse. A saída é o dígito predito pela rede (0 a 9), impresso na interface em modo texto, junto com a latência da inferência. No modo de validação, a saída também inclui as métricas calculadas e um arquivo de log em formato CSV.
 
-### Interface MMIO com o Coprocessador
+### Os Três Modos de Operação
 
-O coprocessador é acessado via mapeamento de memória a partir do endereço físico `0xFF200000`. Três registradores PIO são utilizados:
+A aplicação apresenta um menu em modo texto com os três modos exigidos pelo enunciado:
 
-| Offset | Registrador    | Função                                          |
-|--------|----------------|-------------------------------------------------|
-| `0x00` | `pio_data_out` | Leitura do resultado e flags de status          |
-| `0x10` | `pio_signals`  | enable (bit 0), clr_operation (bit 1), rst (bit 2) |
-| `0x20` | `pio_data_in`  | Escrita da instrução de 32 bits                 |
+| Modo | Descrição                                                              |
+|------|------------------------------------------------------------------------|
+| 1    | Inferência a partir de uma imagem PNG informada pelo usuário           |
+| 2    | Inferência a partir de um dígito desenhado na tela com o mouse         |
+| 3    | Validação/benchmark sobre um conjunto de imagens, com métricas e log   |
 
-O mapeamento é feito via chamada de sistema (system call, ou syscall) `mmap2` (syscall 192), acessando `/dev/mem` com permissão de leitura e escrita. O offset passado ao mmap2 é `0xFF200` — o endereço físico dividido pelo tamanho de página de 4096 bytes.
+### Interface MMIO com o Controlador VGA
 
-### Conjunto de Instruções (ISA)
+Além dos três registradores do coprocessador ELM herdados do Marco 2 (offsets `0x00`, `0x10` e `0x20`), o sistema utiliza três novos registradores PIO do controlador VGA, adicionados ao projeto Quartus:
 
-Cada dado é enviado ao coprocessador como uma instrução de 32 bits. Os 3 bits menos significativos definem o opcode:
+| Offset | Registrador       | Função                                                    |
+|--------|-------------------|-----------------------------------------------------------|
+| `0x30` | `pio_vga_status`  | Leitura do sinal done (bit 0)                             |
+| `0x40` | `pio_vga_signals` | enable (bit 0), reset (bit 1)                             |
+| `0x50` | `pio_data_in_vga` | Escrita da posição e cor: posy[28:19], posx[18:9], RGB[8:0] |
 
-| Opcode | Instrução              | Descrição                                                        |
-|--------|------------------------|------------------------------------------------------------------|
-| `0`    | `STORE_IMG`            | Armazena pixel da imagem. Índice em [12:3], valor em [20:13]    |
-| `1`    | `STORE_WEIGHTS_ADDR`   | Define o endereço do próximo peso. Índice em [19:3]             |
-| `2`    | `STORE_WEIGHTS_VALUE`  | Armazena o valor do peso. Dado em [18:3]                        |
-| `3`    | `STORE_BIAS`           | Armazena um bias. Índice em [9:3], valor em [25:10]             |
-| `4`    | `STORE_BETA`           | Armazena um coeficiente beta. Índice em [13:3], valor em [29:14]|
-| `5`    | `START`                | Dispara a inferência                                            |
+A cor é representada em 9 bits no formato RRRGGGBBB, ou seja, 3 bits por canal. O protocolo de escrita de um pixel segue o mesmo princípio de handshake do coprocessador: escreve-se o dado, pulsa-se o enable e aguarda-se o sinal de done.
 
-O bit 4 de `pio_data_out` é a flag DONE. O driver faz polling nesse bit após cada instrução enviada. Para os pesos W_in (100.352 elementos), o envio é dividido em dois: primeiro o endereço com opcode 1 sem esperar DONE, depois o valor com opcode 2 esperando DONE.
+### Arquivos de Entrada
 
-### Arquivos Binários de Entrada
+Os parâmetros da rede neural continuam sendo lidos dos arquivos binários do diretório `data/`, da mesma forma que no Marco 2. Para o modo de benchmark, é utilizado um arquivo CSV de entrada que lista, em cada linha, o caminho de uma imagem PNG e o dígito esperado:
 
-Os arquivos devem estar no diretório `data/`:
-
-| Arquivo           | Tamanho      | Conteúdo                        |
-|-------------------|--------------|---------------------------------|
-| `data/img.bin`    | 784 bytes    | Pixels brutos 8 bits por pixel  |
-| `data/w_in_q.bin` | 200.704 bytes| Pesos W_in em Q4.12 (int16)     |
-| `data/b_q.bin`    | 256 bytes    | Bias em Q4.12 (int16)           |
-| `data/beta_q.bin` | 2.560 bytes  | Pesos beta em Q4.12 (int16)     |
-
-Em caso de teste com 100 imagens, os arquivos de imagem devem ser nomeados `data/0.bin` até `data/99.bin`. Os arquivos de imagem usados nos testes de predição para definir a acurácia da inferencia já estão no diretório `data/`, sendo 10 imagens para cada digito de 0 à 9. 
+| Arquivo            | Conteúdo                                                     |
+|--------------------|-------------------------------------------------------------|
+| `data/w_in_q.bin`  | Pesos W_in em Q4.12 (int16)                                  |
+| `data/b_q.bin`     | Bias em Q4.12 (int16)                                        |
+| `data/beta_q.bin`  | Coeficientes beta em Q4.12 (int16)                          |
+| `casoteste.csv`    | Lista de imagens do benchmark, no formato `caminho,esperado`|
 
 <div align="center">
 <h1>
@@ -115,52 +103,25 @@ Em caso de teste com 100 imagens, os arquivos de imagem devem ser nomeados `data
 </h1>
 </div>
 
-### Mapeamento de Memória (MMIO)
+### Integração do Controlador VGA
 
-Em sistemas Linux com FPGA, a forma padrão de o processador acessar os registradores do hardware é através de mapeamento de memória (Memory-Mapped I/O). O arquivo especial `/dev/mem` expõe o espaço de endereçamento físico do sistema como se fosse um arquivo, permitindo que um processo em nível de usuário mapeie regiões físicas para o seu espaço de endereçamento virtual através da syscall `mmap`.
+O controlador VGA é um módulo Verilog instanciado na FPGA, ao lado do coprocessador ELM. Ele recebe a posição de um pixel e sua cor, escreve esse pixel em uma memória de vídeo interna, e essa memória alimenta a saída VGA física da placa, que é conectada a um monitor. A tela tem resolução de 320×240 pixels. Para a aplicação se comunicar com esse módulo, três PIOs foram adicionados ao projeto no Platform Designer do Quartus, nos offsets `0x30`, `0x40` e `0x50`. Importante notar que o controlador VGA não precisa estar embutido no coprocessador, bastando a correta instanciação dos PIOs para sua utilização.
 
-Na DE1-SoC, a ponte HPS-to-FPGA Lightweight mapeia os periféricos da FPGA a partir do endereço físico `0xFF200000`. Após o mapeamento, o driver escreve e lê nesses endereços usando instruções `STR` e `LDR` comuns do ARM, como se fossem posições de memória normais.
+### Exibição da Imagem na Tela
 
-### Mapeamento da ponte HPS-to-FPGA via mmap2
-<img width="370" height="360" alt="image" src="https://github.com/user-attachments/assets/875105c8-0139-4819-9b06-ca3af995745f" />
+A imagem MNIST tem apenas 28×28 pixels, o que seria praticamente imperceptível em uma tela de 320×240. Por isso, cada pixel da imagem é desenhado como um bloco de 8×8 pixels na tela, resultando em uma área de 224×224 pixels. Essa área é centralizada na tela, o que gera uma margem de 48 pixels na horizontal (`(320 - 224) / 2`) e de 8 pixels na vertical (`(240 - 224) / 2`). Como a imagem está em escala de cinza de 8 bits e o controlador usa apenas 3 bits por canal, o valor de cada pixel é reduzido aos seus 3 bits mais significativos e replicado nos três canais de cor, produzindo um tom de cinza equivalente.
 
+### Leitura do Mouse no Linux
 
-### System Calls Linux em Assembly ARM
+No Linux, vale o princípio de que tudo é tratado como arquivo. Um mouse conectado por USB é exposto pelo sistema como o arquivo especial `/dev/input/mice`, e seus movimentos e cliques podem ser lidos como um fluxo de bytes, da mesma forma que se lê um arquivo comum. A cada evento, o sistema fornece um pacote de três bytes: o primeiro contém o estado dos botões (bit 0 para o esquerdo, bit 1 para o direito), e os outros dois contêm os deslocamentos horizontal e vertical, ambos com sinal. É importante destacar que o mouse informa deslocamentos relativos, e não a posição absoluta, então cabe à aplicação manter a posição do cursor somando esses deslocamentos. Outro ponto relevante é que o mouse é lido inteiramente pelo processador ARM, sem qualquer envolvimento da FPGA.
 
-Uma chamada de sistema é uma rotina que permite que um aplicativo de usuário solicite ações que requerem privilégios especiais. No código em Assembly, essas chamadas são feitas nas funções `mapear_fpga` e `carregar_arquivo`, carregando o número da syscall no registrador R7, os argumentos nos registradores R0 a R5, e executando a instrução `SVC 0`. As syscalls utilizadas no driver são:
+### Acesso MMIO pela Linguagem C
 
-| Syscall | Número | Uso no driver                          |
-|---------|--------|----------------------------------------|
-| `open`  | 5      | Abre `/dev/mem` e os arquivos binários |
-| `read`  | 3      | Lê o conteúdo dos arquivos             |
-| `close` | 6      | Fecha os descritores de arquivo        |
-| `mmap2` | 192    | Mapeia o espaço de endereço da FPGA    |
+Diferente do Marco 2, onde a comunicação MMIO era feita em Assembly, neste marco a aplicação em C precisa acessar diretamente os registradores do controlador VGA. Isso é feito através de ponteiros marcados com a palavra-chave `volatile`. O uso do `volatile` é essencial porque esses endereços apontam para hardware: cada leitura ou escrita tem um efeito colateral real (como disparar uma operação na FPGA). Sem o `volatile`, o compilador poderia otimizar o código, combinando ou eliminando acessos que parecem redundantes mas não são, o que quebraria o protocolo de comunicação. O endereço base da ponte é obtido a partir do retorno da função `mapear_fpga` do driver, que devolve o endereço virtual já mapeado.
 
-### Representação em Ponto Fixo Q4.12
+### Decodificação de PNG com stb_image
 
-Os parâmetros da rede neural são armazenados no formato Q4.12: inteiros de 16 bits com sinal, onde os 12 bits menos significativos representam a parte fracionária e os 4 bits mais significativos representam a parte inteira, incluindo sinal. Os arquivos binários foram gerados em big-endian. Por isso, após cada `LDRH` (Carrega 2 bytes em little-endian), é aplicada a instrução `REV16` para inverter a ordem dos bytes antes de montar a instrução para o coprocessador.
-
-### Protocolo de Comunicação com o Coprocessador
-
-O handshake para cada instrução funciona da seguinte forma:
-
-1. Escreve a instrução de 32 bits no registrador `data_in` (offset `0x20`)
-2. Ativa o sinal `enable` escrevendo `1` no `pio_signals` (offset `0x10`)
-3. Aguarda em polling até o bit 4 de `data_out` (flag DONE) ser 1
-4. Desativa o `enable` escrevendo `0` no `pio_signals`
-
-Para `STORE_WEIGHTS_ADDR` (opcode 1), o coprocessador retorna ao estado IDLE sem passar pela memória, portanto não gera sinal DONE. Essa instrução é enviada sem polling.
-
-### Fluxo de envio de instrução ao coprocessador
-<img width="100" height="400" alt="image" src="https://github.com/user-attachments/assets/a2749b8b-3a98-465f-a768-27c5582b7e82" />
-
-### Interworking Thumb–ARM
-
-O GCC por padrão compila código C em Thumb-2, enquanto o assembly do driver é escrito em ARM (A32). Quando código Thumb chama uma função ARM, o processador precisa trocar de modo, isso é chamado de interworking. Para funcionar corretamente sem a flag -marm, o arquivo assembly precisa de três declarações:
-
-- `.syntax unified` — Ativa a sintaxe ARM unificada (UAL)
-- `.arm` — Declara que o código a seguir é ARM, não Thumb
-- `.type funcname, %function` — Usada antes de cada função exportada. Informa ao linker que é uma função ARM, fazendo com que ele gere automaticamente os stubs de interworking para as chamadas vindas do C
+Para o modo de inferência a partir de arquivo, é necessário ler imagens no formato PNG. Para isso, foi utilizada a biblioteca stb_image, que é de header único, ou seja, todo o seu código está contido em um único arquivo `.h`, sem necessidade de instalação. A biblioteca decodifica o PNG e, com o parâmetro adequado, força a saída para um único canal em escala de cinza, mesmo que a imagem original seja colorida. Após a leitura, a aplicação verifica se as dimensões são de fato 28×28 antes de prosseguir.
 
 <div align="center">
 <h1>
@@ -170,82 +131,63 @@ O GCC por padrão compila código C em Thumb-2, enquanto o assembly do driver é
 </h1>
 </div>
 
-A metodologia usada no projeto foi a do PBL (Problem Based Learning) com reuniões em sessões tutorial, onde a turma define meta e discute a solução do problema. Os roteiros disponibilizados pelos professores ajudaram no desenvolvimento do projeto, o LAB 0 foi importante para entender o funcionamento do terminal Linux com a placa DE1-SoC e o Lab 2 foi fundamental para compreendermos a integração FPGA-HPS, além de ter sido importante na utilização do coprocessador que foi disponibilizado por Maike. Durante as sessões tutoriais, tópicos cruciais foram debatidos, como a utilização das chamadas de sistema, o mapeamento da memória, polling ou interrupção, entre outros.
+A metodologia usada no projeto foi a do PBL (Problem Based Learning), com reuniões em sessões tutoriais, onde a turma define metas e discute a solução do problema. Os roteiros disponibilizados pelos professores ajudaram no desenvolvimento, com destaque para os laboratórios que trataram da integração FPGA-HPS e da comunicação com a placa. Durante as sessões tutoriais deste marco, foram debatidos tópicos como a integração do controlador VGA via PIOs, a melhor forma de exibir uma imagem pequena em uma tela maior, a leitura do mouse pelo sistema de arquivos do Linux, e estratégias para melhorar a precisão da inferência sobre desenhos feitos à mão.
 
-O driver foi desenvolvido em Assembly ARMv7, junto a uma API em C composta pelo arquivo principal `main.c` e pelo header driver.h para estruturar a integração entre as duas linguagens, que declara as funções exportadas pelo assembly e centraliza as constantes do hardware. Essa separação permitiu que o C controlasse o fluxo da aplicação enquanto o assembly ficou responsável por toda a comunicação com o coprocessador.
+A aplicação foi desenvolvida em linguagem C, mantendo o driver Assembly do Marco 2 sem alterações. Essa decisão respeita a separação de responsabilidades: o driver cuida exclusivamente da comunicação com o coprocessador ELM, enquanto a aplicação em C orquestra a leitura de arquivos, o controle do VGA, a leitura do mouse e a lógica dos três modos de operação.
 
 <div align="center">
 <h1>
-  
+
 ## Descrição da Solução
 
 </h1>
 </div>
 
-### Arquitetura Geral do Driver
+### Arquitetura Geral da Aplicação
 
-O driver é organizado como uma biblioteca de funções em Assembly ARMv7, linkada diretamente com o programa C. O ponto de entrada é o `main` do C. O endereço da ponte FPGA é obtido por `mapear_fpga` através do Syscall e armazenado em uma variável global (`base_mmio`) na seção `.data` do assembly, acessível por todas as funções.
+A aplicação é organizada em torno de um menu interativo em modo texto. Ao iniciar, ela executa uma rotina de inicialização que carrega os parâmetros da rede, mapeia a FPGA e envia os pesos, bias e beta ao coprocessador uma única vez. Em seguida, entra em um laço onde apresenta o menu e executa o modo escolhido pelo usuário. O acesso ao coprocessador é feito pelas funções do driver Assembly (`enviar_img`, `iniciar_inferencia`, etc.), enquanto o acesso ao controlador VGA é feito por funções em C escritas especificamente para este marco.
 
-| Função                       | Responsabilidade                                                |
-|------------------------------|-----------------------------------------------------------------|
-| `mapear_fpga`                | Abre /dev/mem, mapeia a ponte FPGA, salva o endereço base      |
-| `carregar_arquivo`           | Lê um arquivo binário para um buffer em memória                |
-| `enviar_instrucao`           | Envia uma instrução e aguarda DONE                             |
-| `enviar_instrucao_sem_done`  | Envia uma instrução sem aguardar (opcode 1)                    |
-| `enviar_bias`                | Carrega e envia os 128 valores de bias                         |
-| `enviar_beta`                | Carrega e envia os 1280 coeficientes beta                      |
-| `enviar_img`                 | Carrega e envia os 784 pixels da imagem                        |
-| `enviar_peso`                | Carrega e envia os 100.352 pesos W_in                          |
-| `iniciar_inferencia`         | Limpa DONE, dispara START, aguarda conclusão, retorna o dígito |
-| `reset_coprocessador`        | Pulsa o sinal de reset da FPGA                                 |
+| Função              | Responsabilidade                                                  |
+|---------------------|-------------------------------------------------------------------|
+| `vga_write` / `vga_read` | Escreve e lê os registradores do VGA via ponteiro volatile   |
+| `desenhar_pixel`    | Envia um pixel ao VGA seguindo o protocolo de handshake          |
+| `desenhar_quadrado` | Preenche um bloco quadrado de pixels                             |
+| `limpar_tela`       | Pinta toda a tela de preto                                       |
+| `reset_vga`         | Aplica um pulso de reset no controlador VGA                      |
+| `exibir_imagem`     | Exibe uma imagem 28×28 escalada na tela                         |
+| `carregar_png`      | Lê uma imagem PNG do disco usando a stb_image                   |
+| `aplicar_blur`      | Suaviza um desenho binário antes da inferência                  |
+| `modo_arquivo`      | Implementa o modo de inferência a partir de arquivo             |
+| `modo_desenho`      | Implementa o modo de desenho com o mouse                        |
+| `modo_benchmark`    | Implementa o modo de validação com métricas                     |
 
-### Hierarquia de chamadas do driver
-<img width="500" height="375" alt="image" src="https://github.com/user-attachments/assets/0807f077-8b50-43c0-a939-42059d6dff70" />
+### Primitivas de Desenho no VGA
 
-### mapear_fpga
+A base de todo o desenho é a função `desenhar_pixel`. Ela monta a instrução de 32 bits empacotando a posição Y nos bits [28:19], a posição X nos bits [18:9] e a cor nos bits [8:0]. Em seguida, escreve essa instrução no registrador de dados (`0x50`), pulsa o sinal de enable (escreve 1 e depois 0 no `0x40`) e aguarda em polling o sinal de done (bit 0 do `0x30`) ficar em 1. A partir dessa primitiva, `desenhar_quadrado` preenche blocos com dois laços aninhados, `limpar_tela` percorre os 320×240 pixels da tela pintando tudo de preto, e `exibir_imagem` converte cada pixel da imagem MNIST em uma cor de cinza e o desenha como um bloco escalado.
 
-Abre `/dev/mem` com syscall `open` (O_RDWR) e em seguida chama `mmap2` com os argumentos: endereço NULL, tamanho 4096, proteção PROT_READ|PROT_WRITE, flag MAP_SHARED, o file descriptor obtido, e o offset de página `0xFF200`. O endereço virtual mapeado é salvo na variável global `base_mmio` e também retornado em R0. Um ponto importante: R7 é o registrador de número de syscall e é callee-saved segundo a AAPCS — por isso `mapear_fpga` inclui R7 no seu `PUSH/POP`, garantindo que o valor do registrador seja preservado para o C.
+### Modo 1 — Inferência a Partir de Arquivo
 
-### carregar_arquivo
+Neste modo, o usuário informa o caminho de uma imagem PNG. A aplicação lê a imagem com a stb_image, valida que ela tem 28×28 pixels, exibe-a na tela VGA e a envia ao coprocessador. A inferência é então disparada, e o dígito predito é impresso junto com a latência medida. A latência é medida usando a função `clock_gettime` com o relógio monotônico, que é imune a ajustes do horário do sistema, garantindo medições confiáveis.
 
-Recebe em R0 o caminho do arquivo, em R1 o endereço do buffer de destino, e em R2 o tamanho da leitura. Antes de executar a syscall `open`, salva R2 em R6 por garantia para recuperar o valor caso o kernel modifique R2 durante a syscall. Após o `open`, salva o file descriptor em R4, chama `read` com o buffer e tamanho originais, e então chama `close`. Para garantir que dados importantes não sejam perdidos, todos os registradores R4–R8 e LR são salvos na pilha no início e restaurados ao final da rotina.
+### Modo 2 — Desenho com o Mouse
 
-### enviar_instrucao e enviar_instrucao_sem_done
+Este é o modo mais elaborado. A aplicação abre o dispositivo do mouse e entra em um laço lendo os pacotes de três bytes. A posição do cursor é mantida somando os deslocamentos, e é limitada à área de desenho de 224×224 pixels. Um cursor vermelho de 8×8 pixels acompanha o movimento: quando o cursor muda de célula, a célula anterior é restaurada à sua cor real e a nova é pintada de vermelho, dando a impressão de que o cursor se desloca pela tela.
 
-`enviar_instrucao` recebe em R0 a instrução de 32 bits, escreve no `data_in` e ativa o `enable`. A partir daí, entra em loop de polling no `data_out` testando o bit 4 (DONE) com a instrução `TST`. Quando `DONE = 1`, desativa o enable e retorna. `enviar_instrucao_sem_done` faz apenas a escrita e o pulso de enable, sem entrar no polling. É usada exclusivamente para o opcode 1 (STORE_WEIGHTS_ADDR), que não gera DONE.
+Mantendo o botão esquerdo pressionado, o usuário pinta as células de branco. Para saber quais células foram pintadas, a aplicação mantém uma cópia do desenho em memória, chamada de shadow buffer. Esse buffer é necessário porque o controlador VGA só permite a escrita de pixels, não a leitura da memória de vídeo; sem ele, não haveria como recuperar o desenho para enviá-lo ao coprocessador. Ao pressionar o botão direito, o desenho é encerrado, e o conteúdo do shadow buffer (após o tratamento descrito adiante) é enviado para classificação. A saída pelo botão direito é detectada por transição, ou seja, o programa reage apenas ao momento em que o botão passa de solto para pressionado, evitando que o modo seja encerrado acidentalmente caso o botão já estivesse pressionado ao entrar.
 
-### enviar_bias, enviar_beta, enviar_img
+### Modo 3 — Benchmark
 
-Cada função carrega `base_mmio` em R4, chama `carregar_arquivo` para ler o arquivo no buffer, e percorre o buffer em loop montando e enviando as instruções com `enviar_instrucao`:
+No modo de validação, a aplicação lê um arquivo CSV de entrada onde cada linha contém o caminho de uma imagem PNG e o dígito esperado. Para cada imagem da lista, ela carrega o PNG, exibe a imagem na tela, mede o tempo da inferência e compara o resultado com o valor esperado. Ao final, calcula a acurácia, a latência média e seu desvio padrão, o tempo total e o throughput (imagens por segundo), exibindo essas métricas no terminal e salvando um arquivo CSV de log com o resultado de cada imagem e o resumo final.
 
-- **bias**: Usa `LDRH` + `REV16` para carregar 2 bytes do valor do buffer e inverte os bytes para o formato little-endin, depois desloca os bits com `LSL #10` (valor nos bits [25:10]). Desloca o índice atual com `LSL #3` (índice nos bits [9:3]) e termina com o opcode 3 (STORE_BIAS).
-- **beta**: Usa `LDRH` + `REV16` com o mesmo intuíto de carregar o valor do buffer, depois desloca os bits com `LSL #14` (valor nos bits [29:14]). Desloca o índice com `LSL #3` (índice nos bits [13:3]) e termina com o opcode 4 (STORE_BETA).
-- **img**: Usa `LDRB` para carregar apenas 1 byte, e desloca os bits usando `LSL #13` (valor nos bits [20:13]). Desloca o índice atual com `LSL #3` (índice nos bits [12:3]) e termina com o opcode 0 (STORE_IMG).
+O desvio padrão calculado é o amostral, que divide a soma dos quadrados dos desvios por N menos 1, apropriado quando se trabalha com uma amostra. A latência de cada imagem mede apenas o tempo da inferência em si (envio da imagem e disparo), enquanto o tempo total, usado no cálculo do throughput, abrange todo o laço, incluindo a exibição na tela. A escolha de ler as imagens a partir de um CSV de entrada torna o modo flexível: para testar um conjunto diferente, basta trocar o arquivo de entrada, sem necessidade de recompilar o programa.
 
-Perceba que `enviar_img` só carrega 1 byte ao invés de 2 bytes como `enviar_bias` e `enviar_beta` (E assim como `enviar_peso`). A formatação dos valores da imagem em Q4.12 é feita dentro do coprocessador, então ela é enviada com a extensão normal de bits (8 bits por pixel).
+### Filtro de Blur
 
-### enviar_peso
+Durante os testes do modo de desenho, observamos que a maioria das inferências estava errada. Investigando, identificamos que o problema vinha da diferença entre o que era desenhado e as imagens com que a rede havia sido construída. As imagens originais do MNIST têm bordas suaves, com tons de cinza nas transições, enquanto o nosso desenho era puramente binário, com pixels totalmente brancos ou totalmente pretos. Para aproximar o desenho do estilo esperado pela rede, foi adicionado um filtro de blur 3×3, que substitui cada pixel pela média de seus vizinhos válidos, criando as transições de cinza nas bordas. Esse filtro é aplicado apenas no momento de enviar o desenho ao coprocessador; visualmente, a tela continua mostrando os pixels nítidos que o usuário desenhou.
 
-Funciona de forma similar as outras rotinas de envio de dados, mas o envio dos pesos é o mais custoso. Os 100.352 valores precisam de um índice de 17 bits. Com o valor de 16 bits, opcode de 3 bits e a instrução de 32 bits, é inviável uma única instrução conter todos os operandos necessários. Portanto, para cada peso, são enviadas duas instruções:
+### Inicialização e Menu
 
-1. **STORE_WEIGHTS_ADDR**: Envia apenas o índice nos bits [19:3] com o opcode 1, sem polling.
-2. **STORE_WEIGHTS_VALUE**: Envia o valor nos bits [18:3] logo em seguida com o opcode 2, com polling de DONE
-
-### iniciar_inferencia
-
-Antes de disparar a inferência, aplica um pulso de `clr_operation` (bit 1 do `pio_signals`) para garantir que o flag DONE esteja em 0. Isso evita que o polling seguinte saia imediatamente ao encontrar um DONE stale de uma operação anterior. Em seguida, envia a instrução START (opcode 5), ativa o enable, e aguarda em polling até `DONE = 1`. Após a conclusão, lê `data_out`, desativa o enable, e aplica `AND R0, R0, #15` para isolar os 4 bits do dígito predito, que é retornado em R0 ao C para ser exibido no terminal e comparado com o valor esperado (Em caso de teste).
-
-### reset_coprocessador
-
-Escreve o valor `4` no `pio_signals` (bit 2, `rst = 1`), aguarda um delay de 0x5000 iterações com `SUBS/BNE` para garantir que o pulso dure ciclos suficientes para a FPGA registrar, e então escreve `0` para liberar o reset.
-
-### Header driver.h
-
-O `driver.h` é o contrato entre o C e o Assembly. Ele define as constantes do hardware (endereços, offsets, máscaras, opcodes, tamanhos de buffer) e declara as assinaturas das funções exportadas pelo assembly. Sem o header, o compilador C não saberia que as funções existem. Com ele, `enviar_bias("data/b_q.bin")` é compilado corretamente, com o ponteiro da string passado em R0 conforme a convenção AAPCS.
-
-### Aplicação em C — main.c
-
-O `main.c` é o orquestrador do sistema. Ele verifica se os arquivos existem no disco, chama `mapear_fpga` e `reset_coprocessador`, envia os parâmetros fixos da rede (`enviar_bias`, `enviar_beta` e `enviar_pesos`) uma única vez antes do loop do teste, e então itera sobre as 100 imagens: para cada uma, envia a imagem, dispara a inferência, registra o resultado e aplica um reset. Ao final, exibe a acurácia total. Os parâmetros da rede são enviados fora do loop porque não mudam entre imagens, reenviá-los a cada iteração desperdiçaria tempo enviando esses dados 100 vezes.
+A rotina de inicialização é executada uma única vez ao abrir o programa. Ela carrega os arquivos de pesos, bias e beta do disco, mapeia a ponte HPS-FPGA, reseta o coprocessador e o controlador VGA, e envia os parâmetros da rede ao coprocessador. O envio dos parâmetros é feito apenas nessa etapa porque eles não mudam entre as inferências; reenviá-los a cada classificação desperdiçaria um tempo considerável, já que apenas os pesos somam mais de cem mil valores. Após a inicialização, o programa entra no laço do menu, onde o usuário escolhe entre os três modos ou encerra a aplicação.
 
 <div align="center">
 <h1>
@@ -257,17 +199,36 @@ O `main.c` é o orquestrador do sistema. Ele verifica se os arquivos existem no 
 
 ### Estrutura de Diretórios
 
-<img width="300" height="500" alt="image" src="https://github.com/user-attachments/assets/5ec10c98-eb62-4ae2-aad3-456cbb4aaa6e" />
+```
+projeto/
+├── main.c            (aplicação em C com os três modos)
+├── driver.s          (driver Assembly do Marco 2, inalterado)
+├── driver.h          (constantes e protótipos das funções do driver)
+├── stb_image.h       (biblioteca para leitura de PNG)
+├── casoteste.csv     (lista de imagens do benchmark)
+└── data/
+    ├── w_in_q.bin
+    ├── b_q.bin
+    ├── beta_q.bin
+    └── test/         (imagens PNG de teste, organizadas por dígito)
+```
 
+A biblioteca stb_image é de header único e pode ser obtida com o comando a seguir, devendo ser colocada na mesma pasta do `main.c`:
+
+```bash
+wget https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
+```
 
 ### Compilação
 
-Na DE1-SoC (Linux ARM), C e assembly são compilados e linkados juntos em um único binário:
+Na DE1-SoC (Linux ARM), o assembly é montado como objeto e linkado com o C pelo GCC:
 
 ```bash
 as -o driver.o driver.s
-gcc -o main main.c driver.o
+gcc -o main main.c driver.o -lm -lrt -std=gnu99
 ```
+
+Alguns detalhes da compilação merecem explicação. A flag `-lm` liga a biblioteca matemática, necessária para a função `sqrt` usada no cálculo do desvio padrão. A flag `-lrt` liga a biblioteca de tempo real, onde reside a função `clock_gettime` nas versões mais antigas da glibc presentes na placa. A flag `-std=gnu99` permite declarar variáveis dentro dos laços `for` e, ao mesmo tempo, mantém habilitadas as extensões POSIX necessárias para a medição de tempo, reforçadas pela diretiva `_POSIX_C_SOURCE` no topo do `main.c`.
 
 ### Execução
 
@@ -286,17 +247,15 @@ sudo su
 </h1>
 </div>
 
-**Offset incorreto no mmap2.** O endereço `0xFF200000` foi inicialmente passado diretamente como offset para o mmap2. A syscall espera o offset em unidades de páginas (4096 bytes), então o correto é `0xFF200000 / 4096 = 0xFF200`. Sem essa correção, o mapeamento apontava para uma região errada e todas as operações MMIO falhavam silenciosamente.
+**Tela preta intermitente no controlador VGA.** Em algumas execuções, a tela funcionava normalmente, mas em outras ficava completamente preta, sem padrão aparente. Identificamos que o controlador VGA podia iniciar em um estado interno inconsistente, dependendo de como havia terminado a execução anterior. A primeira versão da rotina de reset usava um pulso curto, com cerca de 0x5000 iterações de delay, insuficiente para a máquina de estados do controlador estabilizar em todos os casos. A correção foi reforçar essa rotina: primeiro zerando os sinais para garantir um estado conhecido, depois aplicando o pulso de reset e, por fim, aumentando o tempo de espera para 0x10000 iterações em cada etapa. Após esse ajuste, a tela passou a aparecer de forma confiável.
 
-**R7 não salvo em mapear_fpga.** O registrador R7 é usado como número de syscall (open e mmap2) mas não estava sendo incluído no PUSH/POP da função. Como R7 é callee-saved pela convenção AAPCS, o C assumia que seu valor seria preservado após a chamada. Após mapear_fpga retornar com R7 corrompido, qualquer chamada de função subsequente no C poderia falhar de formas imprevisíveis. A correção foi incluir R7 no `PUSH {R4-R5, R7, LR}`.
+**Inferências incorretas no modo de desenho.** Ao testar o modo de desenho, percebemos que a maioria dos dígitos era classificada de forma errada. A causa era a diferença entre o desenho binário, feito com o mouse, e as imagens originais do MNIST, que possuem bordas suaves. A solução foi aplicar um filtro de blur 3×3 sobre o desenho antes de enviá-lo ao coprocessador, criando as transições de cinza que a rede esperava encontrar. Essa mudança melhorou a taxa de acerto sobre os desenhos manuais.
 
-**Interworking Thumb–ARM.** O GCC sem a flag `-marm` gera código Thumb-2 para o C, enquanto o assembly usa ARM (A32). Sem as diretivas corretas, o processador tentava executar ARM como Thumb ao entrar nas funções do driver, causando SIGTRAP ou Segmentation Fault. A correção foi adicionar `.syntax unified` e `.arm` no topo do arquivo assembly, e `.type funcname, %function` antes de cada função exportada, fazendo com que o linker gere os stubs de interworking automaticamente.
+**Conflito de tipo no retorno de mapear_fpga.** Durante a integração, houve uma fase em que a tela não aparecia mesmo com o reset correto. O problema estava na declaração da função `mapear_fpga` no header: em uma das tentativas, ela foi declarada como `void`, o que fazia o C não capturar o endereço retornado pela função, deixando o ponteiro do VGA apontando para uma região inválida. O coprocessador continuava funcionando, pois usava o endereço guardado internamente no assembly, mas o VGA não, pois dependia do retorno capturado em C. A correção foi declarar a função com o tipo de retorno correto e capturar o endereço adequadamente antes de convertê-lo para o ponteiro usado nas operações de VGA.
 
-**R2 destruído pelo open() em carregar_arquivo.** O tamanho do buffer chegava em R2 e era usado depois pelo `read`. Porém, a syscall `open` pode modificar R2, perdendo o tamanho. A correção foi salvar R2 em R6 antes do open e restaurá-lo para R2 antes do read.
+**Encerramento imediato do modo de desenho.** Em uma versão inicial, ao entrar no modo de desenho, ele era encerrado instantaneamente. Isso acontecia porque o botão direito ainda estava registrado como pressionado de uma ação anterior, e o código reagia ao nível do botão em vez da sua transição. A correção foi consumir os eventos residuais ao entrar no modo e passar a detectar a transição de solto para pressionado, garantindo que o modo só encerre quando o usuário de fato clicar o botão direito naquele momento.
 
-**Flag DONE stale causando saída prematura da espera de inferência.** Após o envio do último peso, a flag DONE ficava em 1. Quando `iniciar_inferencia` era chamada e o START era enviado, o loop de polling encontrava DONE = 1 (do peso anterior) imediatamente e retornava antes da inferência terminar, lendo um resultado inválido. A correção foi adicionar um pulso de `clr_operation` antes do START, garantindo DONE=0 antes de disparar a inferência.
-
-**Segmentation Fault por relocation de variável global.** Uma versão intermediária tentou passar o endereço da ponte como variável global `.word 0` no assembly, armazenada por `mapear_fpga` e lida pelas demais funções via `LDR R4, =base_mmio; LDR R4, [R4]`. Problemas de relocation ao linkar o objeto assembly com o C faziam com que as funções lessem um endereço inválido ou zero. A solução foi manter a variável `base_mmio` no `.data` do assembly com as diretivas de interworking corretas.
+**clock_gettime indefinido na compilação.** Ao adicionar a medição de tempo, o linker reclamava que a função `clock_gettime` não estava definida. Isso ocorria porque, nas versões antigas de glibc da placa, essa função reside em uma biblioteca separada de tempo real. A correção foi adicionar a flag `-lrt` ao comando de compilação, além de manter a diretiva `_POSIX_C_SOURCE` no topo do arquivo para habilitar as extensões POSIX.
 
 <div align="center">
 <h1>
@@ -306,24 +265,11 @@ sudo su
 </h1>
 </div>
 
-O sistema foi testado com 100 imagens do dataset MNIST, 10 por dígito, armazenadas nos arquivos `data/0.bin` a `data/99.bin`. Os resultados obtidos foram:
+O sistema foi validado nos três modos de operação. No modo de arquivo, imagens conhecidas do dataset foram classificadas corretamente e exibidas na tela. No modo de desenho, foi possível desenhar dígitos com o mouse e obter predições, com a melhora de precisão proporcionada pelo filtro de blur. No modo de benchmark, conjuntos de imagens listados em CSV foram processados automaticamente, gerando as métricas e o log.
 
-| Dígito | Acertos | Erros |
-|--------|---------|-------|
-| 0      | 8/10    | imagens 3 e 6 |
-| 1      | 10/10   | — |
-| 2      | 8/10    | imagens 26 e 27 |
-| 3      | 9/10    | imagem 33 |
-| 4      | 9/10    | imagem 40 |
-| 5      | 6/10    | imagens 51, 53, 55, 59 |
-| 6      | 7/10    | imagens 62, 64, 65 |
-| 7      | 8/10    | imagens 72, 75 |
-| 8      | 9/10    | imagem 80 |
-| 9      | 9/10    | imagem 94 |
+Os testes de desempenho mostraram uma latência de inferência bastante estável, em torno de 18 ms por imagem, com desvio padrão praticamente nulo. Essa estabilidade é esperada, já que o coprocessador executa sempre a mesma sequência de operações para qualquer imagem, independentemente do seu conteúdo. O throughput observado ficou em torno de 9 a 10 imagens por segundo; esse valor inclui o tempo de exibição da imagem na tela VGA, que domina o tempo total de cada iteração, e não apenas o tempo de inferência.
 
-**Total: 83 acertos em 100 → Acurácia de 83%**
-
-O dígito 1 obteve acurácia perfeita, enquanto o dígito 5 foi o mais difícil (60%), provavelmente por ser visualmente semelhante a 6 e 9. Para uma ELM com pesos fixos rodando em hardware dedicado em FPGA, 83% é um resultado satisfatório.
+Quanto à acurácia, com imagens do dataset o sistema reproduz o resultado obtido no Marco 2, em torno de 83%. No modo de desenho, mesmo com o filtro de blur, a acurácia é menor e mais variável, o que é coerente com a natureza do problema: um traço feito à mão com o mouse dificilmente reproduz a distribuição de tons e a centralização das imagens originais do MNIST.
 
 <div align="center">
 <h1>
@@ -333,11 +279,13 @@ O dígito 1 obteve acurácia perfeita, enquanto o dígito 5 foi o mais difícil 
 </h1>
 </div>
 
-O driver desenvolvido neste marco cumpre o objetivo de estabelecer a comunicação entre o processador ARM e o coprocessador ELM na FPGA, realizando todo o fluxo de carregamento de parâmetros e inferência de forma integrada com a aplicação C.
+A aplicação desenvolvida neste marco cumpre o objetivo de entregar o sistema final, integrando o coprocessador, o driver e o controlador VGA em um programa único com os três modos de operação solicitados. O usuário pode classificar uma imagem de arquivo, desenhar um dígito com o mouse e rodar um conjunto de validação que reporta acurácia, latência, desvio padrão e throughput, salvando os resultados em CSV.
 
-A principal dificuldade do desenvolvimento foi lidar com os detalhes de baixo nível do Assembly ARMv7 em conjunto com as convenções do Linux: a ordem exata dos argumentos nas syscalls, a preservação dos registradores callee-saved, o offset correto para o mmap2 e o interworking entre os modos Thumb e ARM. Esses aspectos exigiram atenção constante durante a depuração, pois erros nessa camada geralmente não produzem mensagens de erro claras, o programa simplesmente trava ou produz resultados incorretos.
+O principal gargalo de desempenho encontrado está na exibição da imagem no monitor. Cada pixel desenhado exige uma escrita, um pulso de enable e uma espera pelo sinal de done, e cada um desses acessos atravessa a ponte HPS-FPGA, que tem uma latência considerável. Como a imagem é exibida em escala 8×, são desenhados mais de cinquenta mil pixels por imagem, o que domina o tempo total. A inferência em si é rápida e estável. Outro ponto que exigiu atenção foi o envio dos pesos, resolvido enviando os parâmetros da rede uma única vez na inicialização, já que eles não mudam entre as inferências.
 
-A experiência reforçou a compreensão prática da interface entre software e hardware em sistemas embarcados: desde a convenção de chamada AAPCS, passando pelo mapeamento de endereços físicos via MMIO, até o protocolo de handshake com o coprocessador e os detalhes de endianness dos dados. O sistema está funcional e validado com 83% de acurácia no dataset de teste.
+Entre as melhorias tentadas, destacam-se o reforço da rotina de reset do VGA, que resolveu o problema da tela preta intermitente, e a aplicação do filtro de blur no modo de desenho, que melhorou a precisão sobre os traços manuais. Ainda assim, reconhecemos que a entrada manual permanece como a maior fonte de imprecisão do sistema, o que seria um caminho natural para trabalhos futuros, possivelmente com técnicas de centralização e normalização do desenho antes da inferência.
+
+Por fim, vale destacar a importância da metodologia PBL ao longo de todo o projeto. A construção do sistema em marcos sucessivos, partindo do coprocessador em hardware, passando pelo driver em Assembly e chegando à aplicação em C, permitiu compreender na prática como as diferentes camadas de um sistema embarcado se conectam, desde a lógica digital na FPGA até a interface com o usuário no espaço de usuário do Linux.
 
 <div align="center">
 <h1>
@@ -349,12 +297,12 @@ A experiência reforçou a compreensão prática da interface entre software e h
 
 PATTERSON, David A.; HENNESSY, John L. **Computer Organization and Design: The Hardware/Software Interface, ARM Edition**. Amsterdam: Morgan Kaufmann, 2017.
 
-ARM LIMITED. **ARM Architecture Reference Manual — ARMv7-A and ARMv7-R edition**. Disponível em: https://developer.arm.com/documentation/ddi0406/latest
-
 INTEL. **Cyclone V Hard Processor System Technical Reference Manual**. Disponível em: https://www.intel.com/content/www/us/en/docs/programmable/683126/current/overview.html
 
 TECHNOLOGIES, Terasic. **DE1-SoC Board**. Disponível em: https://www.terasic.com.tw/cgi-bin/page/archive.pl?Language=English&No=836
 
 THE LINUX KERNEL ORGANIZATION. **Linux Kernel Syscall Table for ARM**. Disponível em: https://syscalls.mebeim.net/?table=arm/32/eabi/latest
+
+BARRETT, Sean. **stb_image — Public domain image loader**. Disponível em: https://github.com/nothings/stb
 
 HUANG, Guang-Bin; ZHU, Qin-Yu; SIEW, Chee-Kheong. Extreme Learning Machine: Theory and Applications. **Neurocomputing**, v. 70, n. 1-3, p. 489-501, 2006.

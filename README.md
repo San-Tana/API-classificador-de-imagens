@@ -218,11 +218,11 @@ projeto/
 ├── driver.h          (constantes e protótipos das funções do driver)
 ├── stb_image.h       (biblioteca para leitura de PNG)
 ├── casoteste.csv     (lista de imagens do benchmark)
+├── test/         (imagens PNG de teste, organizadas por dígito)
 └── data/
     ├── w_in_q.bin
     ├── b_q.bin
-    ├── beta_q.bin
-    └── test/         (imagens PNG de teste, organizadas por dígito)
+    └── beta_q.bin
 ```
 
 ### Compilação

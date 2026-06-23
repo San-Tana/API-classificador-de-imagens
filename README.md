@@ -54,7 +54,7 @@
 <h1>
 
 ## Modificações do Driver
-  Para o Marco 3, o código em Assembly foi simplificado para virar um driver de hardware puro. A principal mudança foi a remoção completa da leitura de arquivos no Assembly. No marco anterior, o arquivo `driver.s` precisava abrir e ler os dados usando chamadas de sistema. Agora, toda essa parte de abrir e ler os arquivos `.bin` e PNG foi transferida para a aplicação em C.
+  Para o Marco 3, algumas mudanças foram feitas, o código em Assembly foi simplificado. A principal mudança foi a remoção completa da leitura de arquivos no Assembly. No marco anterior, o arquivo `driver.s` precisava abrir e ler os dados usando chamadas de sistema. Agora, toda essa parte de abrir e ler os arquivos `.bin` e PNG foi transferida para a aplicação em C.
 
   Por conta disso, as funções de envio do driver não recebem mais caminhos de texto. Elas agora recebem no registrador R0 o ponteiro exato da memória RAM onde o C já deixou os dados carregados. O Assembly apenas move esse endereço usando a instrução MOV R2, R0 e descarrega os dados sequencialmente na FPGA.
 
@@ -93,6 +93,8 @@ Além dos três registradores do coprocessador ELM herdados do Marco 2 (offsets 
 | `0x50` | `pio_data_in_vga` | Escrita da posição e cor: posy[28:19], posx[18:9], RGB[8:0] |
 
 A cor é representada em 9 bits no formato RRRGGGBBB, ou seja, 3 bits por canal. O protocolo de escrita de um pixel segue o mesmo princípio de handshake do coprocessador: escreve-se o dado, pulsa-se o enable e aguarda-se o sinal de done.
+
+<img width="813" height="176" alt="image" src="https://github.com/user-attachments/assets/77f21574-d6c0-4a3f-b905-4cc9e11dbc2b" />
 
 ### Arquivos de Entrada
 

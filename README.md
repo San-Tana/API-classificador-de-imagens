@@ -82,6 +82,8 @@ A aplicação apresenta um menu em modo texto com os três modos exigidos pelo e
 | 2    | Inferência a partir de um dígito desenhado na tela com o mouse         |
 | 3    | Validação/benchmark sobre um conjunto de imagens, com métricas e log   |
 
+<img width="1250" height="546" alt="image" src="https://github.com/user-attachments/assets/b12027e9-8d0e-4072-b4e2-a21ff5549f64" />
+
 ### Interface MMIO com o Controlador VGA
 
 Além dos três registradores do coprocessador ELM herdados do Marco 2 (offsets `0x00`, `0x10` e `0x20`), o sistema utiliza três novos registradores PIO do controlador VGA, adicionados ao projeto Quartus:
@@ -187,6 +189,8 @@ Este é o modo mais elaborado. A aplicação abre o dispositivo do mouse e entra
 
 Mantendo o botão esquerdo pressionado, o usuário pinta as células de branco. Para saber quais células foram pintadas, a aplicação mantém uma cópia do desenho em memória, chamada de shadow buffer. Esse buffer é necessário porque o controlador VGA só permite a escrita de pixels, não a leitura da memória de vídeo; sem ele, não haveria como recuperar o desenho para enviá-lo ao coprocessador. Ao pressionar o botão direito, o desenho é encerrado, e o conteúdo do shadow buffer (após o tratamento descrito adiante) é enviado para classificação. A saída pelo botão direito é detectada por transição, ou seja, o programa reage apenas ao momento em que o botão passa de solto para pressionado, evitando que o modo seja encerrado acidentalmente caso o botão já estivesse pressionado ao entrar.
 
+<img width="886" height="475" alt="image" src="https://github.com/user-attachments/assets/4ce7fb0c-e1b9-464f-83da-8bd625b6d27a" />
+
 ### Modo 3 — Benchmark
 
 No modo de validação, a aplicação lê um arquivo CSV de entrada onde cada linha contém o caminho de uma imagem PNG e o dígito esperado. Para cada imagem da lista, ela carrega o PNG, exibe a imagem na tela, mede o tempo da inferência e compara o resultado com o valor esperado. Ao final, calcula a acurácia, a latência média e seu desvio padrão, o tempo total e o throughput (imagens por segundo), exibindo essas métricas no terminal e salvando um arquivo CSV de log com o resultado de cada imagem e o resumo final.
@@ -218,7 +222,7 @@ projeto/
 ├── driver.h          (constantes e protótipos das funções do driver)
 ├── stb_image.h       (biblioteca para leitura de PNG)
 ├── casoteste.csv     (lista de imagens do benchmark)
-├── test/         (imagens PNG de teste, organizadas por dígito)
+├── test/             (imagens PNG de teste, organizadas por dígito)
 └── data/
     ├── w_in_q.bin
     ├── b_q.bin

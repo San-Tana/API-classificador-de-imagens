@@ -1,0 +1,17 @@
+imagem,esperado,predito,acerto,tempo_ms
+test/0/3.png,0,0,1,17.979
+test/1/2.png,1,1,1,17.979
+test/2/1.png,2,6,0,17.978
+test/3/18.png,3,6,0,17.978
+test/4/4.png,4,4,1,17.979
+test/5/8.png,5,2,0,17.979
+
+=== Resultado do Benchmark ===
+Imagens processadas:  6
+Falhas de leitura:    2
+Acertos:              3/6
+Acuracia:             50.0%
+Latencia media:       17.98 ms
+Desvio padrao:        0.00 ms
+Tempo total:          626.92 ms
+Throughput:           9.6 imagens/s

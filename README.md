@@ -46,12 +46,22 @@
 </h1>
 </div>
 
-  Este documento descreve o desenvolvimento do Marco 3 de um sistema embarcado para classificação de dígitos numéricos manuscritos, executado na placa DE1-SoC, um SoC heterogêneo que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual a aplicação que o usuário de fato utiliza é construída, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2). O controlador VGA utilizado para a exibição das imagens foi disponibilizado por Maike de Oliveira, e seu repositório original pode ser encontrado em: github.com/DestinyWolf/Problema_SD_2026_1.
+  Este documento descreve o desenvolvimento do Marco 3 de um sistema para classificação de dígitos numéricos, executado na placa DE1-SoC, um SoC que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual a aplicação que o usuário de fato utiliza é construída, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2) com algumas alterações. O controlador VGA utilizado para a exibição das imagens foi disponibilizado por Maike de Oliveira, e seu repositório original pode ser encontrado em: github.com/DestinyWolf/Problema_SD_2026_1.
 
-  O objetivo do Marco 3 é desenvolver uma aplicação em linguagem C que ofereça três modos de operação ao usuário: a classificação de uma imagem a partir de um arquivo, a classificação de um dígito desenhado na tela com o auxílio de um mouse, e um modo de validação em lote que computa métricas de acurácia e desempenho. Um requisito importante deste marco é que o driver do Marco 2 fosse mantido sem nenhuma alteração, responsável apenas pelo coprocessador ELM. Por essa razão, todo o controle do controlador VGA e a leitura do mouse foram implementados diretamente na aplicação em C.
+  O objetivo do Marco 3 é desenvolver uma aplicação em linguagem C que ofereça três modos de operação ao usuário: a classificação de uma imagem a partir de um arquivo, a classificação de um dígito desenhado na tela com o auxílio de um mouse, e um modo de benchmark que computa métricas de acurácia e desempenho. Todo o controle do controlador VGA e a leitura do mouse foram implementados diretamente na aplicação em C.
 
 <div align="center">
 <h1>
+
+## Modificações do Driver
+  Para o Marco 3, o código em Assembly foi simplificado para virar um driver de hardware puro. A principal mudança foi a remoção completa da leitura de arquivos no Assembly. No marco anterior, o arquivo `driver.s` precisava abrir e ler os dados usando chamadas de sistema. Agora, toda essa parte de abrir e ler os arquivos `.bin` e PNG foi transferida para a aplicação em C.
+
+  Por conta disso, as funções de envio do driver não recebem mais caminhos de texto. Elas agora recebem no registrador R0 o ponteiro exato da memória RAM onde o C já deixou os dados carregados. O Assembly apenas move esse endereço usando a instrução MOV R2, R0 e descarrega os dados sequencialmente na FPGA.
+
+  Por fim, ajustamos a forma como o C recebe o endereço da função `mapear_fpga`. Como o endereço de hardware da placa é muito alto (perto de 0xFF200000), o C podia achar que era um número negativo e errar a conversão. Usando um "casting" duplo, garantimos que os 32 bits do endereço cheguem inteiros para que a tela VGA funcione sem travar.
+
+</h1>
+</div>
 
 ## Requisitos Principais
 
@@ -60,7 +70,7 @@
 
 ### Entrada e Saída
 
-A entrada do sistema é uma imagem de 28×28 pixels em escala de cinza, que pode vir de um arquivo PNG no disco ou de um desenho feito pelo usuário com o mouse. A saída é o dígito predito pela rede (0 a 9), impresso na interface em modo texto, junto com a latência da inferência. No modo de validação, a saída também inclui as métricas calculadas e um arquivo de log em formato CSV.
+A entrada do sistema é uma imagem de 28×28 pixels em escala de cinza, que pode vir de um arquivo PNG no primeiro modo ou de um desenho feito pelo usuário com o mouse no segundo modo. A saída é o dígito predito (0 a 9), impresso na interface em forma de texto, junto com a latência da inferência. No modo de benchmark, a saída também inclui as métricas calculadas e um arquivo de log em formato CSV.
 
 ### Os Três Modos de Operação
 
@@ -105,19 +115,19 @@ Os parâmetros da rede neural continuam sendo lidos dos arquivos binários do di
 
 ### Integração do Controlador VGA
 
-O controlador VGA é um módulo Verilog instanciado na FPGA, ao lado do coprocessador ELM. Ele recebe a posição de um pixel e sua cor, escreve esse pixel em uma memória de vídeo interna, e essa memória alimenta a saída VGA física da placa, que é conectada a um monitor. A tela tem resolução de 320×240 pixels. Para a aplicação se comunicar com esse módulo, três PIOs foram adicionados ao projeto no Platform Designer do Quartus, nos offsets `0x30`, `0x40` e `0x50`. Importante notar que o controlador VGA não precisa estar embutido no coprocessador, bastando a correta instanciação dos PIOs para sua utilização.
+Foi necessário a adição de um módulo no projeto do coprocessador no Quartus, o controlador VGA, que é um módulo Verilog instanciado na FPGA, ao lado do coprocessador ELM. Ele recebe a posição de um pixel e sua cor, escreve esse pixel em uma memória de vídeo interna, e essa memória alimenta a saída VGA física da placa, que é conectada a um monitor. A tela tem resolução de 320×240 pixels. Para a aplicação se comunicar com esse módulo, três PIOs foram adicionados ao projeto no Platform Designer do Quartus, nos offsets `0x30`, `0x40` e `0x50`. O controlador VGA não precisa estar dentro do coprocessador, basta apenas a correta instanciação dos PIOs para sua utilização.
 
 ### Exibição da Imagem na Tela
 
-A imagem MNIST tem apenas 28×28 pixels, o que seria praticamente imperceptível em uma tela de 320×240. Por isso, cada pixel da imagem é desenhado como um bloco de 8×8 pixels na tela, resultando em uma área de 224×224 pixels. Essa área é centralizada na tela, o que gera uma margem de 48 pixels na horizontal (`(320 - 224) / 2`) e de 8 pixels na vertical (`(240 - 224) / 2`). Como a imagem está em escala de cinza de 8 bits e o controlador usa apenas 3 bits por canal, o valor de cada pixel é reduzido aos seus 3 bits mais significativos e replicado nos três canais de cor, produzindo um tom de cinza equivalente.
+A imagem MNIST tem apenas 28×28 pixels, o que ficaria muito pequeno em uma tela de 320×240. Por isso, cada pixel da imagem é desenhado como um bloco de 8×8 pixels na tela, resultando em uma área de 224×224 pixels. Essa área é centralizada na tela, gerando uma margem de 48 pixels na horizontal (`(320 - 224) / 2`) e de 8 pixels na vertical (`(240 - 224) / 2`). Como a imagem está em escala de cinza de 8 bits e o controlador usa apenas 3 bits por canal, o valor de cada pixel é reduzido aos seus 3 bits mais significativos e replicado nos três canais de cor, produzindo um tom de cinza equivalente.
 
 ### Leitura do Mouse no Linux
 
-No Linux, vale o princípio de que tudo é tratado como arquivo. Um mouse conectado por USB é exposto pelo sistema como o arquivo especial `/dev/input/mice`, e seus movimentos e cliques podem ser lidos como um fluxo de bytes, da mesma forma que se lê um arquivo comum. A cada evento, o sistema fornece um pacote de três bytes: o primeiro contém o estado dos botões (bit 0 para o esquerdo, bit 1 para o direito), e os outros dois contêm os deslocamentos horizontal e vertical, ambos com sinal. É importante destacar que o mouse informa deslocamentos relativos, e não a posição absoluta, então cabe à aplicação manter a posição do cursor somando esses deslocamentos. Outro ponto relevante é que o mouse é lido inteiramente pelo processador ARM, sem qualquer envolvimento da FPGA.
+No Linux, tudo é tratado como arquivo, então um mouse conectado por USB é mostrado pelo sistema como o arquivo `/dev/input/mice`, e seus movimentos e cliques podem ser lidos como um fluxo de bytes, da mesma forma que se lê um arquivo comum. A cada evento, o sistema fornece um pacote de três bytes: o primeiro contém o estado dos botões (bit 0 para o esquerdo, bit 1 para o direito), e os outros dois contêm os deslocamentos horizontal e vertical, ambos com sinal. É importante destacar que o mouse só passa deslocamentos relativos, ele não sabe o tamanho da tela nem onde está, então na aplicação a posição do cursor é incrementada por esses deslocamentos. Além disso, o mouse é lido apenas pelo processador ARM, a FPGA não interfere.
 
 ### Acesso MMIO pela Linguagem C
 
-Diferente do Marco 2, onde a comunicação MMIO era feita em Assembly, neste marco a aplicação em C precisa acessar diretamente os registradores do controlador VGA. Isso é feito através de ponteiros marcados com a palavra-chave `volatile`. O uso do `volatile` é essencial porque esses endereços apontam para hardware: cada leitura ou escrita tem um efeito colateral real (como disparar uma operação na FPGA). Sem o `volatile`, o compilador poderia otimizar o código, combinando ou eliminando acessos que parecem redundantes mas não são, o que quebraria o protocolo de comunicação. O endereço base da ponte é obtido a partir do retorno da função `mapear_fpga` do driver, que devolve o endereço virtual já mapeado.
+Diferente do Marco 2, onde deixamos a comunicação com o hardware no Assembly, neste marco passamos o controle da VGA direto para o código em C através de ponteiros. Para isso funcionar, o uso do `volatile` é fundamental. Como estamos lidando com registradores físicos da FPGA que mudam de estado sozinhos, o `volatile` impede que o compilador tente "otimizar" o código e ignore leituras repetidas (o que quebraria o nosso handshake de tela). A base para esses acessos vem direto do endereço virtual retornado por mapear_fpga.
 
 ### Decodificação de PNG com stb_image
 
@@ -131,9 +141,9 @@ Para o modo de inferência a partir de arquivo, é necessário ler imagens no fo
 </h1>
 </div>
 
-A metodologia usada no projeto foi a do PBL (Problem Based Learning), com reuniões em sessões tutoriais, onde a turma define metas e discute a solução do problema. Os roteiros disponibilizados pelos professores ajudaram no desenvolvimento, com destaque para os laboratórios que trataram da integração FPGA-HPS e da comunicação com a placa. Durante as sessões tutoriais deste marco, foram debatidos tópicos como a integração do controlador VGA via PIOs, a melhor forma de exibir uma imagem pequena em uma tela maior, a leitura do mouse pelo sistema de arquivos do Linux, e estratégias para melhorar a precisão da inferência sobre desenhos feitos à mão.
+A metodologia usada no projeto foi a do PBL (Problem Based Learning), com reuniões em sessões tutoriais, onde a turma define metas e discute a solução do problema. As sessões de desenvolvimento foram fundamentais para evoluir no projeto, tirando dúvidas com o professor e os monitores. Durante as sessões tutoriais deste marco, foram debatidos tópicos como a integração do controlador VGA via PIOs, a melhor forma de exibir uma imagem pequena em uma tela maior, a leitura do mouse pelo sistema de arquivos do Linux, e estratégias para melhorar a precisão da inferência sobre desenhos feitos à mão.
 
-A aplicação foi desenvolvida em linguagem C, mantendo o driver Assembly do Marco 2 sem alterações. Essa decisão respeita a separação de responsabilidades: o driver cuida exclusivamente da comunicação com o coprocessador ELM, enquanto a aplicação em C orquestra a leitura de arquivos, o controle do VGA, a leitura do mouse e a lógica dos três modos de operação.
+A aplicação foi desenvolvida em linguagem C, mantendo o driver Assembly do Marco 2 com algumas alterações, já citadas. Essa decisão respeita a separação de responsabilidades: o driver cuida exclusivamente da comunicação com o coprocessador ELM, enquanto a aplicação em C orquestra a leitura de arquivos, o controle do VGA, a leitura do mouse e a lógica dos três modos de operação.
 
 <div align="center">
 <h1>
@@ -145,7 +155,7 @@ A aplicação foi desenvolvida em linguagem C, mantendo o driver Assembly do Mar
 
 ### Arquitetura Geral da Aplicação
 
-A aplicação é organizada em torno de um menu interativo em modo texto. Ao iniciar, ela executa uma rotina de inicialização que carrega os parâmetros da rede, mapeia a FPGA e envia os pesos, bias e beta ao coprocessador uma única vez. Em seguida, entra em um laço onde apresenta o menu e executa o modo escolhido pelo usuário. O acesso ao coprocessador é feito pelas funções do driver Assembly (`enviar_img`, `iniciar_inferencia`, etc.), enquanto o acesso ao controlador VGA é feito por funções em C escritas especificamente para este marco.
+A aplicação é organizada em torno de um menu interativo. Ao iniciar, ela executa uma rotina de inicialização que carrega os parâmetros da rede, mapeia a FPGA e envia os pesos, bias e beta ao coprocessador uma única vez. Em seguida, entra em um laço onde apresenta o menu e executa o modo escolhido pelo usuário. O acesso ao coprocessador é feito pelas funções do driver Assembly (`enviar_img`, `iniciar_inferencia`, etc.), enquanto o acesso ao controlador VGA é feito por funções em C escritas especificamente para este marco.
 
 | Função              | Responsabilidade                                                  |
 |---------------------|-------------------------------------------------------------------|
@@ -183,11 +193,11 @@ O desvio padrão calculado é o amostral, que divide a soma dos quadrados dos de
 
 ### Filtro de Blur
 
-Durante os testes do modo de desenho, observamos que a maioria das inferências estava errada. Investigando, identificamos que o problema vinha da diferença entre o que era desenhado e as imagens com que a rede havia sido construída. As imagens originais do MNIST têm bordas suaves, com tons de cinza nas transições, enquanto o nosso desenho era puramente binário, com pixels totalmente brancos ou totalmente pretos. Para aproximar o desenho do estilo esperado pela rede, foi adicionado um filtro de blur 3×3, que substitui cada pixel pela média de seus vizinhos válidos, criando as transições de cinza nas bordas. Esse filtro é aplicado apenas no momento de enviar o desenho ao coprocessador; visualmente, a tela continua mostrando os pixels nítidos que o usuário desenhou.
+Durante os testes do modo de desenho, observamos que a maioria das inferências estava errada. Investigando, identificamos que o problema vinha da diferença entre o que era desenhado e as imagens com que a rede havia sido construída. As imagens originais do MNIST têm bordas suaves, com tons de cinza nas transições, enquanto o nosso desenho era puramente binário, com pixels totalmente brancos ou totalmente pretos. Para aproximar o desenho do estilo esperado pela rede, foi adicionado um filtro de blur 3×3, que substitui cada pixel pela média de seus vizinhos válidos, criando as transições de cinza nas bordas. Esse filtro é aplicado apenas no momento de enviar o desenho ao coprocessador, visualmente, a tela continua mostrando os pixels sem o efeito do blur. A aplicação do blur melhorou um pouco a acurácia da inferência, mas ainda aconteciam erros.
 
 ### Inicialização e Menu
 
-A rotina de inicialização é executada uma única vez ao abrir o programa. Ela carrega os arquivos de pesos, bias e beta do disco, mapeia a ponte HPS-FPGA, reseta o coprocessador e o controlador VGA, e envia os parâmetros da rede ao coprocessador. O envio dos parâmetros é feito apenas nessa etapa porque eles não mudam entre as inferências; reenviá-los a cada classificação desperdiçaria um tempo considerável, já que apenas os pesos somam mais de cem mil valores. Após a inicialização, o programa entra no laço do menu, onde o usuário escolhe entre os três modos ou encerra a aplicação.
+A rotina de inicialização é executada uma única vez ao abrir o programa. Ela carrega os arquivos de pesos, bias e beta, mapeia a ponte HPS-FPGA, reseta o coprocessador e o controlador VGA, e envia os parâmetros da rede ao coprocessador. O envio dos parâmetros é feito apenas nessa etapa porque eles não mudam entre as inferências, reenviá-los a cada classificação desperdiçaria um tempo considerável, já que apenas os pesos somam mais de cem mil valores. Após a inicialização, o programa entra no laço do menu, onde o usuário escolhe entre os três modos ou encerra a aplicação.
 
 <div align="center">
 <h1>
@@ -213,12 +223,6 @@ projeto/
     └── test/         (imagens PNG de teste, organizadas por dígito)
 ```
 
-A biblioteca stb_image é de header único e pode ser obtida com o comando a seguir, devendo ser colocada na mesma pasta do `main.c`:
-
-```bash
-wget https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
-```
-
 ### Compilação
 
 Na DE1-SoC (Linux ARM), o assembly é montado como objeto e linkado com o C pelo GCC:
@@ -228,7 +232,7 @@ as -o driver.o driver.s
 gcc -o main main.c driver.o -lm -lrt -std=gnu99
 ```
 
-Alguns detalhes da compilação merecem explicação. A flag `-lm` liga a biblioteca matemática, necessária para a função `sqrt` usada no cálculo do desvio padrão. A flag `-lrt` liga a biblioteca de tempo real, onde reside a função `clock_gettime` nas versões mais antigas da glibc presentes na placa. A flag `-std=gnu99` permite declarar variáveis dentro dos laços `for` e, ao mesmo tempo, mantém habilitadas as extensões POSIX necessárias para a medição de tempo, reforçadas pela diretiva `_POSIX_C_SOURCE` no topo do `main.c`.
+A flag `-lm` liga a biblioteca math, necessária para a função `sqrt` usada no cálculo do desvio padrão. A flag `-lrt` liga a biblioteca de tempo real, onde fica a função `clock_gettime`. A flag `-std=gnu99` permite declarar variáveis dentro dos laços `for` e, ao mesmo tempo, mantém habilitadas as extensões POSIX necessárias para a medição de tempo, reforçadas pela diretiva `_POSIX_C_SOURCE` no topo do `main.c`.
 
 ### Execução
 
@@ -247,11 +251,9 @@ sudo su
 </h1>
 </div>
 
-**Tela preta intermitente no controlador VGA.** Em algumas execuções, a tela funcionava normalmente, mas em outras ficava completamente preta, sem padrão aparente. Identificamos que o controlador VGA podia iniciar em um estado interno inconsistente, dependendo de como havia terminado a execução anterior. A primeira versão da rotina de reset usava um pulso curto, com cerca de 0x5000 iterações de delay, insuficiente para a máquina de estados do controlador estabilizar em todos os casos. A correção foi reforçar essa rotina: primeiro zerando os sinais para garantir um estado conhecido, depois aplicando o pulso de reset e, por fim, aumentando o tempo de espera para 0x10000 iterações em cada etapa. Após esse ajuste, a tela passou a aparecer de forma confiável.
+**Tela preta intermitente no controlador VGA.** Em algumas execuções, a tela funcionava normalmente, mas em outras ficava completamente preta. Identificamos que o controlador VGA podia iniciar em um estado interno inconsistente, dependendo de como havia terminado a execução anterior. A primeira versão da rotina de reset usava um pulso curto, com cerca de 0x5000 iterações de delay, insuficiente para a máquina de estados do controlador estabilizar em todos os casos. A correção foi reforçar essa rotina: primeiro zerando os sinais para garantir um estado conhecido, depois aplicando o pulso de reset e, por fim, aumentando o tempo de espera para 0x10000 iterações em cada etapa. Após esse ajuste, a tela passou a aparecer sempre que o sistema era inicializado.
 
-**Inferências incorretas no modo de desenho.** Ao testar o modo de desenho, percebemos que a maioria dos dígitos era classificada de forma errada. A causa era a diferença entre o desenho binário, feito com o mouse, e as imagens originais do MNIST, que possuem bordas suaves. A solução foi aplicar um filtro de blur 3×3 sobre o desenho antes de enviá-lo ao coprocessador, criando as transições de cinza que a rede esperava encontrar. Essa mudança melhorou a taxa de acerto sobre os desenhos manuais.
-
-**Conflito de tipo no retorno de mapear_fpga.** Durante a integração, houve uma fase em que a tela não aparecia mesmo com o reset correto. O problema estava na declaração da função `mapear_fpga` no header: em uma das tentativas, ela foi declarada como `void`, o que fazia o C não capturar o endereço retornado pela função, deixando o ponteiro do VGA apontando para uma região inválida. O coprocessador continuava funcionando, pois usava o endereço guardado internamente no assembly, mas o VGA não, pois dependia do retorno capturado em C. A correção foi declarar a função com o tipo de retorno correto e capturar o endereço adequadamente antes de convertê-lo para o ponteiro usado nas operações de VGA.
+**Inferências incorretas no modo de desenho.** Ao testar o modo de desenho, percebemos que a maioria dos dígitos era classificada de forma errada. A causa era a diferença entre o desenho feito com o mouse, e as imagens originais do MNIST, que possuem bordas suaves. A solução foi aplicar um filtro de blur 3×3 sobre o desenho antes de enviá-lo ao coprocessador, criando as transições de cinza que a rede esperava encontrar. Essa mudança melhorou a taxa de acerto sobre os desenhos manuais.
 
 **Encerramento imediato do modo de desenho.** Em uma versão inicial, ao entrar no modo de desenho, ele era encerrado instantaneamente. Isso acontecia porque o botão direito ainda estava registrado como pressionado de uma ação anterior, e o código reagia ao nível do botão em vez da sua transição. A correção foi consumir os eventos residuais ao entrar no modo e passar a detectar a transição de solto para pressionado, garantindo que o modo só encerre quando o usuário de fato clicar o botão direito naquele momento.
 
@@ -281,9 +283,9 @@ Quanto à acurácia, com imagens do dataset o sistema reproduz o resultado obtid
 
 A aplicação desenvolvida neste marco cumpre o objetivo de entregar o sistema final, integrando o coprocessador, o driver e o controlador VGA em um programa único com os três modos de operação solicitados. O usuário pode classificar uma imagem de arquivo, desenhar um dígito com o mouse e rodar um conjunto de validação que reporta acurácia, latência, desvio padrão e throughput, salvando os resultados em CSV.
 
-O principal gargalo de desempenho encontrado está na exibição da imagem no monitor. Cada pixel desenhado exige uma escrita, um pulso de enable e uma espera pelo sinal de done, e cada um desses acessos atravessa a ponte HPS-FPGA, que tem uma latência considerável. Como a imagem é exibida em escala 8×, são desenhados mais de cinquenta mil pixels por imagem, o que domina o tempo total. A inferência em si é rápida e estável. Outro ponto que exigiu atenção foi o envio dos pesos, resolvido enviando os parâmetros da rede uma única vez na inicialização, já que eles não mudam entre as inferências.
+O principal gargalo de desempenho encontrado está na exibição da imagem no monitor. Cada pixel desenhado exige uma escrita, um pulso de enable e uma espera pelo sinal de done, e cada um desses acessos atravessa a ponte HPS-FPGA, que tem uma latência considerável. Como a imagem é exibida em escala 8×, são desenhados mais de cinquenta mil pixels por imagem, o que se sobressai no tempo total. 
 
-Entre as melhorias tentadas, destacam-se o reforço da rotina de reset do VGA, que resolveu o problema da tela preta intermitente, e a aplicação do filtro de blur no modo de desenho, que melhorou a precisão sobre os traços manuais. Ainda assim, reconhecemos que a entrada manual permanece como a maior fonte de imprecisão do sistema, o que seria um caminho natural para trabalhos futuros, possivelmente com técnicas de centralização e normalização do desenho antes da inferência.
+Entre as melhorias tentadas, destacam-se o reforço da rotina de reset do VGA, que resolveu o problema da tela preta, e a aplicação do filtro de blur no modo de desenho, que melhorou a precisão sobre os traços manuais. Ainda assim, reconhecemos que a entrada manual permanece como a maior fonte de imprecisão do sistema, o que seria um caminho natural para trabalhos futuros, possivelmente com técnicas de centralização e normalização do desenho antes da inferência.
 
 Por fim, vale destacar a importância da metodologia PBL ao longo de todo o projeto. A construção do sistema em marcos sucessivos, partindo do coprocessador em hardware, passando pelo driver em Assembly e chegando à aplicação em C, permitiu compreender na prática como as diferentes camadas de um sistema embarcado se conectam, desde a lógica digital na FPGA até a interface com o usuário no espaço de usuário do Linux.
 

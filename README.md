@@ -94,7 +94,7 @@ Além dos três registradores do coprocessador ELM herdados do Marco 2 (offsets 
 
 A cor é representada em 9 bits no formato RRRGGGBBB, ou seja, 3 bits por canal. O protocolo de escrita de um pixel segue o mesmo princípio de handshake do coprocessador: escreve-se o dado, pulsa-se o enable e aguarda-se o sinal de done.
 
-<img width="813" height="176" alt="image" src="https://github.com/user-attachments/assets/77f21574-d6c0-4a3f-b905-4cc9e11dbc2b" />
+<img width="824" height="183" alt="image" src="https://github.com/user-attachments/assets/a5bebe47-85d6-46b1-8247-c1228f2df5ef" />
 
 ### Arquivos de Entrada
 

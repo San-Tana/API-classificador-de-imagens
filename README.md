@@ -46,7 +46,7 @@
 </h1>
 </div>
 
-  Este documento descreve o desenvolvimento do Marco 3 de um sistema para classificação de dígitos numéricos, executado na placa DE1-SoC, um SoC que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual a aplicação que o usuário de fato utiliza é construída, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2) com algumas alterações. O controlador VGA utilizado para a exibição das imagens foi disponibilizado por Maike de Oliveira, e seu repositório original pode ser encontrado em: github.com/DestinyWolf/Problema_SD_2026_1.
+  Este documento descreve o desenvolvimento do Marco 3 de um sistema para classificação de dígitos numéricos, executado na placa DE1-SoC, um SoC que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual a aplicação que o usuário de fato utiliza é construída, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2) com algumas alterações. O controlador VGA utilizado para a exibição das imagens foi disponibilizado por Maike de Oliveira, e seu repositório original pode ser encontrado em: _github.com/DestinyWolf/Problema_SD_2026_1_. Caso também queira detalhes sobre o driver em Assembly feito no marco 2, seu repositório pode ser encontrado em: _github.com/San-Tana/Driver-classificador-de-imagens_. Porém, cabe o aviso de que o driver utilizado no marco 3 foi alterado, o que já será detalhado logo em seguida.
 
   O objetivo do Marco 3 é desenvolver uma aplicação em linguagem C que ofereça três modos de operação ao usuário: a classificação de uma imagem a partir de um arquivo, a classificação de um dígito desenhado na tela com o auxílio de um mouse, e um modo de benchmark que computa métricas de acurácia e desempenho. Todo o controle do controlador VGA e a leitura do mouse foram implementados diretamente na aplicação em C.
 
@@ -54,11 +54,13 @@
 <h1>
 
 ## Modificações do Driver
-  Para o Marco 3, algumas mudanças foram feitas, o código em Assembly foi simplificado. A principal mudança foi a remoção completa da leitura de arquivos no Assembly. No marco anterior, o arquivo `driver.s` precisava abrir e ler os dados usando chamadas de sistema. Agora, toda essa parte de abrir e ler os arquivos `.bin` e PNG foi transferida para a aplicação em C.
+  Como dito acima, para o Marco 3, algumas mudanças foram feitas no código em Assembly. A principal mudança foi a remoção completa da leitura de arquivos no Assembly. No marco anterior, o arquivo `driver.s` precisava abrir e ler os dados usando chamadas de sistema. Agora, a função de abrir e ler os arquivos `.bin` e PNG foi transferida para a aplicação em C.
 
   Por conta disso, as funções de envio do driver não recebem mais caminhos de texto. Elas agora recebem no registrador R0 o ponteiro exato da memória RAM onde o C já deixou os dados carregados. O Assembly apenas move esse endereço usando a instrução MOV R2, R0 e descarrega os dados sequencialmente na FPGA.
 
   Por fim, ajustamos a forma como o C recebe o endereço da função `mapear_fpga`. Como o endereço de hardware da placa é muito alto (perto de 0xFF200000), o C podia achar que era um número negativo e errar a conversão. Usando um "casting" duplo, garantimos que os 32 bits do endereço cheguem inteiros para que a tela VGA funcione sem travar.
+
+  A versão atualizada do driver já está disponível neste mesmo repositório, então não há necessidade de fazer essa alteração por conta própria com o driver disponibilizado no repositório citado acima.
 
 </h1>
 </div>
@@ -70,7 +72,16 @@
 
 ### Entrada e Saída
 
-A entrada do sistema é uma imagem de 28×28 pixels em escala de cinza, que pode vir de um arquivo PNG no primeiro modo ou de um desenho feito pelo usuário com o mouse no segundo modo. A saída é o dígito predito (0 a 9), impresso na interface em forma de texto, junto com a latência da inferência. No modo de benchmark, a saída também inclui as métricas calculadas e um arquivo de log em formato CSV.
+A entrada do sistema é uma imagem de 28×28 pixels em escala de cinza, que pode vir de um arquivo PNG no primeiro modo, de um desenho feito pelo usuário com o mouse no segundo modo ou um arquivo em formato CSV, com uma lista de caminhos para arquivos PNG e os dígitos representados em cada arquivo, no terceiro modo. A saída é o dígito predito (0 a 9), impresso na interface em forma de texto, junto com a latência da inferência. No modo de benchmark, a saída também inclui as métricas calculadas e um arquivo de log em formato CSV.
+
+Os parâmetros da rede neural continuam sendo lidos dos arquivos binários do diretório `data/`, da mesma forma que no Marco 2.
+
+| Arquivo            | Conteúdo                                                     |
+|--------------------|-------------------------------------------------------------|
+| `data/w_in_q.bin`  | Pesos W_in em Q4.12 (int16)                                  |
+| `data/b_q.bin`     | Bias em Q4.12 (int16)                                        |
+| `data/beta_q.bin`  | Coeficientes beta em Q4.12 (int16)                          |
+| `casoteste.csv`    | Lista de imagens do benchmark, no formato `caminho,esperado`|
 
 ### Os Três Modos de Operação
 
@@ -97,17 +108,6 @@ Além dos três registradores do coprocessador ELM herdados do Marco 2 (offsets 
 A cor é representada em 9 bits no formato RRRGGGBBB, ou seja, 3 bits por canal. O protocolo de escrita de um pixel segue o mesmo princípio de handshake do coprocessador: escreve-se o dado, pulsa-se o enable e aguarda-se o sinal de done.
 
 <img width="824" height="183" alt="image" src="https://github.com/user-attachments/assets/a5bebe47-85d6-46b1-8247-c1228f2df5ef" />
-
-### Arquivos de Entrada
-
-Os parâmetros da rede neural continuam sendo lidos dos arquivos binários do diretório `data/`, da mesma forma que no Marco 2. Para o modo de benchmark, é utilizado um arquivo CSV de entrada que lista, em cada linha, o caminho de uma imagem PNG e o dígito esperado:
-
-| Arquivo            | Conteúdo                                                     |
-|--------------------|-------------------------------------------------------------|
-| `data/w_in_q.bin`  | Pesos W_in em Q4.12 (int16)                                  |
-| `data/b_q.bin`     | Bias em Q4.12 (int16)                                        |
-| `data/beta_q.bin`  | Coeficientes beta em Q4.12 (int16)                          |
-| `casoteste.csv`    | Lista de imagens do benchmark, no formato `caminho,esperado`|
 
 <div align="center">
 <h1>

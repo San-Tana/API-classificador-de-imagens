@@ -317,7 +317,7 @@ Os testes de desempenho mostraram uma latência de inferência bastante estável
 
 ### Análise dos Resultados
 
-A estabilidade da latência se explica pela natureza do coprocessador: ele executa sempre a mesma sequência de operações para qualquer imagem, independentemente do conteúdo, então o tempo de cada inferência tende a ser idêntico. Isso fica claro pelo desvio padrão praticamente nulo no benchmark.
+A latência é estável porque o coprocessador executa sempre a mesma sequência de operações para qualquer imagem, independentemente do conteúdo, então o tempo de cada inferência tende a ser idêntico. Isso fica claro pelo desvio padrão praticamente nulo no benchmark.
 
 O throughput, por outro lado, é dominado pelo tempo de exibição da imagem na tela VGA, e não pela inferência em si. Como cada pixel exigiria atravessar a ponte HPS-FPGA, desenhar uma imagem inteira escalada 8× leva mais tempo do que classificá-la. Isso explica por que o throughput total fica em ~9 img/s, mesmo com a inferência levando apenas 18 ms.
 

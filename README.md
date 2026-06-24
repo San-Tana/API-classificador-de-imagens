@@ -237,6 +237,7 @@ O sistema foi desenvolvido e validado usando as seguintes ferramentas:
 | Linux embarcado na DE1-SoC | Sistema operacional no ARM HPS |
 | GCC (toolchain ARM) | Compilação do código C |
 | GNU Assembler (as) | Montagem do driver Assembly |
+| IP-Core VGA | Controlador de exibição do monitor |
 | Biblioteca stb_image | Decodificação de PNG |
 
 ### Configuração do Ambiente

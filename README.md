@@ -183,8 +183,6 @@ A aplicação é organizada em torno de um menu interativo. Ao iniciar, ela exec
 | `modo_desenho`      | Implementa o modo de desenho com o mouse                        |
 | `modo_benchmark`    | Implementa o modo de validação com métricas                     |
 
-<img width="1920" height="1080" alt="Diagrama" src="https://github.com/user-attachments/assets/c541c1b2-fe62-4361-b0ef-924e1be55a74" />
-
 ### Primitivas de Desenho no VGA
 
 A base de todo o desenho é a função `desenhar_pixel`. Ela monta a instrução de 32 bits empacotando a posição Y nos bits [28:19], a posição X nos bits [18:9] e a cor nos bits [8:0]. Em seguida, escreve essa instrução no registrador de dados (`0x50`), pulsa o sinal de enable (escreve 1 e depois 0 no `0x40`) e aguarda em polling o sinal de done (bit 0 do `0x30`) ficar em 1. A partir dessa primitiva, `desenhar_quadrado` preenche blocos com dois laços aninhados, `limpar_tela` percorre os 320×240 pixels da tela pintando tudo de preto, e `exibir_imagem` converte cada pixel da imagem MNIST em uma cor de cinza e o desenha como um bloco escalado.
@@ -192,6 +190,8 @@ A base de todo o desenho é a função `desenhar_pixel`. Ela monta a instrução
 ### Modo 1 — Inferência a Partir de Arquivo
 
 Neste modo, o usuário informa o caminho de uma imagem PNG. A aplicação lê a imagem com a stb_image, valida que ela tem 28×28 pixels, exibe-a na tela VGA e a envia ao coprocessador. A inferência é então disparada, e o dígito predito é impresso junto com a latência medida. A latência é medida usando a função `clock_gettime` com o relógio monotônico, que é imune a ajustes do horário do sistema, garantindo medições confiáveis.
+
+<img width="480" height="514" alt="Modo-Arquivo" src="https://github.com/user-attachments/assets/01cc07d4-838f-4362-b7a6-23e99fe86f71" />
 
 ### Modo 2 — Desenho com o Mouse
 
@@ -203,11 +203,13 @@ Mantendo o botão esquerdo pressionado, o usuário pinta as células de branco. 
 
 ### Modo 3 — Benchmark
 
-No modo de validação, a aplicação lê um arquivo CSV de entrada onde cada linha contém o caminho de uma imagem PNG e o dígito esperado. Para cada imagem da lista, ela carrega o PNG, exibe a imagem na tela, mede o tempo da inferência e compara o resultado com o valor esperado. Ao final, calcula a acurácia, a latência média e seu desvio padrão, o tempo total e o throughput (imagens por segundo), exibindo essas métricas no terminal e salvando um arquivo CSV de log com o resultado de cada imagem e o resumo final.
+No modo de validação, a aplicação lê um arquivo CSV de entrada onde cada linha contém o caminho de uma imagem PNG e o dígito esperado. Para cada imagem da lista, ela carrega o PNG, exibe a imagem na tela, mede o tempo da inferência e compara o resultado com o valor esperado. Ao final, calcula a acurácia, a latência média e seu desvio padrão, o tempo total e o throughput (imagens por segundo), exibindo essas métricas no terminal junto com a quantidade de imagens processadas, a quantidade de falhas de leitura e a quantidade de acertos, salvando um arquivo CSV de log com o resultado de cada imagem e o resumo final.
 
 O desvio padrão calculado é o amostral, que divide a soma dos quadrados dos desvios por N menos 1, apropriado quando se trabalha com uma amostra. A latência de cada imagem mede apenas o tempo da inferência em si (envio da imagem e disparo), enquanto o tempo total, usado no cálculo do throughput, abrange todo o laço, incluindo a exibição na tela. A escolha de ler as imagens a partir de um CSV de entrada torna o modo flexível: para testar um conjunto diferente, basta trocar o arquivo de entrada, sem necessidade de recompilar o programa.
 
-A automação dos testes está integrada à própria aplicação, dentro do `modo_benchmark`. Basta listar as imagens no `casoteste.csv` e selecionar a opção 3 do menu, e a aplicação roda todo o conjunto, calcula as métricas e gera o CSV de log automaticamente.
+A automação dos testes está integrada à própria aplicação, dentro do `modo_benchmark`. Basta listar o caminho das imagens e o digito representado nela em um aquivo CSV e selecionar a opção 3 do menu, e a aplicação roda todo o conjunto, calcula as métricas e gera o CSV de log automaticamente. Por padrão, a aplicação irá procurar o arquivo `casoteste.csv` no diretório atual. Para ajudar, também disponibilizamos um arquivo CSV já preenchido com 100 imagens, 10 de cada digito, as quais estão disponíveis na pasta  `test`.
+
+<img width="673" height="187" alt="image" src="https://github.com/user-attachments/assets/7054c5ef-662f-4010-afbe-4b2a067d1f31" />
 
 ### Filtro de Blur
 

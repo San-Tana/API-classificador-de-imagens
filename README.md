@@ -50,7 +50,7 @@
 </h1>
 </div>
 
-  Este documento descreve o desenvolvimento do Marco 3 de um sistema para classificação de dígitos numéricos, executado na placa DE1-SoC, um SoC que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual a aplicação que o usuário de fato utiliza para interagir com o sistema, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2) com algumas alterações. O controlador VGA utilizado para a exibição das imagens foi disponibilizado por Maike de Oliveira, e seu repositório original pode ser encontrado em: _github.com/DestinyWolf/Problema_SD_2026_1_. Caso também queira detalhes sobre o driver em Assembly feito no marco 2, seu repositório pode ser encontrado em: _github.com/San-Tana/Driver-classificador-de-imagens_. Porém, cabe o aviso de que o driver utilizado no marco 3 foi alterado, o que já será detalhado logo em seguida.
+  Este documento descreve o desenvolvimento do Marco 3 de um sistema para classificação de dígitos numéricos, executado na placa DE1-SoC, um SoC que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual é desenvolvida a aplicação que o usuário de fato utiliza para interagir com o sistema, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2) com algumas alterações. O controlador VGA utilizado para a exibição das imagens foi disponibilizado por Maike de Oliveira, e seu repositório original pode ser encontrado em: _github.com/DestinyWolf/Problema_SD_2026_1_. Caso também queira detalhes sobre o driver em Assembly feito no marco 2, seu repositório pode ser encontrado em: _github.com/San-Tana/Driver-classificador-de-imagens_. Porém, cabe o aviso de que o driver utilizado no marco 3 foi alterado, o que já será detalhado logo em seguida.
 
   O objetivo do Marco 3 é desenvolver uma aplicação em linguagem C que ofereça três modos de operação ao usuário: a classificação de uma imagem a partir de um arquivo, a classificação de um dígito desenhado na tela com o auxílio de um mouse, e um modo de benchmark que computa métricas de acurácia e desempenho. Todo o controle do controlador VGA e a leitura do mouse foram implementados diretamente na aplicação em C.
 
@@ -243,7 +243,7 @@ Antes de compilar e executar a aplicação, alguns passos de preparação são n
 
 1. **Hardware conectado.** O monitor deve estar ligado à saída VGA da placa, e o mouse USB conectado a uma das portas USB da placa antes de inicializar o Linux embarcado. A inicialização do sistema reconhece o mouse e o expõe automaticamente em `/dev/input/mice`.
 
-2. **FPGA.** O projeto Quartus, com o coprocessador ELM e os PIOs do controlador VGA mapeados nos offsets `0x30`, `0x40` e `0x50`, precisa estar carregado na FPGA. Sem isso, os acessos MMIO do C não chegam ao hardware correto.
+2. **Projeto Quartus Carregado (FPGA).** O projeto Quartus, com o coprocessador ELM e os PIOs do controlador VGA mapeados nos offsets `0x30`, `0x40` e `0x50`, precisa estar carregado na FPGA. Sem isso, os acessos MMIO do C não chegam ao hardware correto.
 
 3. **Arquivos no diretório de execução.** Os pesos da rede (`w_in_q.bin`, `b_q.bin`, `beta_q.bin`) devem estar dentro de uma pasta `data/` no mesmo diretório do executável. O arquivo `casoteste.csv` e a pasta `test/` com as imagens PNG do benchmark devem estar na raiz do projeto.
 

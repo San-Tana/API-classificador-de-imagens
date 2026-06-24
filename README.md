@@ -56,11 +56,11 @@
 ## Modificações do Driver
   Como dito acima, para o Marco 3, algumas mudanças foram feitas no código em Assembly. A principal mudança foi a remoção completa da leitura de arquivos no Assembly. No marco anterior, o arquivo `driver.s` precisava abrir e ler os dados usando chamadas de sistema. Agora, a função de abrir e ler os arquivos `.bin` e PNG foi transferida para a aplicação em C.
 
-  Por conta disso, as funções de envio do driver não recebem mais caminhos de texto. Elas agora recebem no registrador R0 o ponteiro exato da memória RAM onde o C já deixou os dados carregados. O Assembly apenas move esse endereço usando a instrução MOV R2, R0 e descarrega os dados sequencialmente na FPGA.
+Por conta disso, as funções de envio do driver não recebem mais caminhos de texto. Elas agora recebem no registrador R0 o ponteiro exato da memória RAM onde o C já deixou os dados carregados. O Assembly apenas move esse endereço usando a instrução MOV R2, R0 e descarrega os dados sequencialmente na FPGA.
 
-  Por fim, ajustamos a forma como o C recebe o endereço da função `mapear_fpga`. Como o endereço de hardware da placa é muito alto (perto de 0xFF200000), o C podia achar que era um número negativo e errar a conversão. Usando um "casting" duplo, garantimos que os 32 bits do endereço cheguem inteiros para que a tela VGA funcione sem travar.
+Por fim, ajustamos a forma como o C recebe o endereço da função `mapear_fpga`. Como o endereço de hardware da placa é muito alto (perto de 0xFF200000), o C podia achar que era um número negativo e errar a conversão. Usando um "casting" duplo, garantimos que os 32 bits do endereço cheguem inteiros para que a tela VGA funcione sem travar.
 
-  A versão atualizada do driver já está disponível neste mesmo repositório, então não há necessidade de fazer essa alteração por conta própria com o driver disponibilizado no repositório citado acima.
+A versão atualizada do driver já está disponível neste mesmo repositório, então não há necessidade de fazer essa alteração por conta própria com o driver disponibilizado no repositório citado acima.
 
 </h1>
 </div>

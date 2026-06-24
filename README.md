@@ -241,7 +241,7 @@ O sistema foi desenvolvido e validado usando as seguintes ferramentas:
 
 Antes de compilar e executar a aplicação, alguns passos de preparação são necessários na placa DE1-SoC:
 
-1. **Hardware conectado.** O monitor deve estar ligado à saída VGA da placa, e o mouse USB conectado a uma das portas USB host antes de inicializar o Linux embarcado. A inicialização do sistema reconhece o mouse e o expõe automaticamente em `/dev/input/mice`.
+1. **Hardware conectado.** O monitor deve estar ligado à saída VGA da placa, e o mouse USB conectado a uma das portas USB da placa antes de inicializar o Linux embarcado. A inicialização do sistema reconhece o mouse e o expõe automaticamente em `/dev/input/mice`.
 
 2. **FPGA.** O projeto Quartus, com o coprocessador ELM e os PIOs do controlador VGA mapeados nos offsets `0x30`, `0x40` e `0x50`, precisa estar carregado na FPGA. Sem isso, os acessos MMIO do C não chegam ao hardware correto.
 

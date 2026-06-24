@@ -1,5 +1,4 @@
 sudo su
-rm -f main driver.o
 as -o driver.o driver.s
 gcc -o main main.c driver.o -lm -lrt -std=gnu99
 ./main

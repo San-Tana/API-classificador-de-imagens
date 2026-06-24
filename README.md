@@ -331,11 +331,11 @@ A acurácia de 83% no dataset é consistente com o resultado do Marco 2, o que e
 </h1>
 </div>
 
-A aplicação desenvolvida neste marco cumpre o objetivo de entregar o sistema final, integrando o coprocessador, o driver e o controlador VGA em um programa único com os três modos de operação solicitados. O usuário pode classificar uma imagem de arquivo, desenhar um dígito com o mouse e rodar um conjunto de validação que reporta acurácia, latência, desvio padrão e throughput, salvando os resultados em CSV.
+Ao final, a aplicação entrega o sistema completo, integrando o coprocessador, o driver e o controlador VGA em um programa único com os três modos de operação pedidos. O usuário pode classificar uma imagem de arquivo, desenhar um dígito com o mouse e rodar um conjunto de validação que reporta acurácia, latência, desvio padrão e throughput, salvando os resultados em CSV.
 
 O principal gargalo de desempenho encontrado está na exibição da imagem no monitor. Cada pixel desenhado exige uma escrita, um pulso de enable e uma espera pelo sinal de done, e cada um desses acessos atravessa a ponte HPS-FPGA, que tem uma latência considerável. Como a imagem é exibida em escala 8×, são desenhados mais de cinquenta mil pixels por imagem, o que se sobressai no tempo total. 
 
-Entre as melhorias tentadas, destacam-se o reforço da rotina de reset do VGA, que resolveu o problema da tela preta, e a aplicação do filtro de blur no modo de desenho, que melhorou a precisão sobre os traços manuais. Ainda assim, reconhecemos que a entrada manual permanece como a maior fonte de imprecisão do sistema, o que seria um caminho natural para trabalhos futuros, possivelmente com técnicas de centralização e normalização do desenho antes da inferência.
+Das melhorias que tentamos, duas funcionaram bem: o reforço da rotina de reset do VGA, que resolveu o problema da tela preta, e a aplicação do filtro de blur no modo de desenho, que melhorou a precisão sobre os traços manuais. Ainda assim, a entrada manual segue sendo a maior fonte de imprecisão do sistema, e melhorá-la seria o próximo passo natural se o projeto fosse evoluído.
 
 Por fim, é importante mencionar a metodologia PBL ao longo de todo o projeto. A construção do sistema em marcos sucessivos, partindo do coprocessador em hardware, passando pelo driver em Assembly e chegando à aplicação em C, ajudou a entender na prática como as diferentes camadas de um sistema embarcado se conectam, da lógica digital na FPGA até a interface com o usuário no Linux.
 

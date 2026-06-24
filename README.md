@@ -167,7 +167,7 @@ A aplicação foi desenvolvida em linguagem C, com o driver Assembly do Marco 2 
 
 ### Arquitetura Geral da Aplicação
 
-A aplicação é organizada em torno de um menu interativo. Ao iniciar, ela executa uma rotina de inicialização que carrega os parâmetros da rede, mapeia a FPGA e envia os pesos, bias e beta ao coprocessador uma única vez. Em seguida, entra em um laço onde apresenta o menu e executa o modo escolhido pelo usuário. O acesso ao coprocessador é feito pelas funções do driver Assembly (`enviar_img`, `iniciar_inferencia`, etc.), enquanto o acesso ao controlador VGA é feito por funções em C escritas especificamente para este marco.
+A aplicação é organizada em torno de um menu interativo em modo texto, em vez de receber os parâmetros direto pela linha de comando ao executar o programa. Escolhemos o menu porque os três modos funcionam de jeitos bem diferentes, e fica mais fácil navegar entre eles assim. Os parâmetros de cada modo (como o caminho do PNG ou o nome do CSV) são pedidos na hora que o modo é executado. Ao iniciar, ela executa uma rotina de inicialização que carrega os parâmetros da rede, mapeia a FPGA e envia os pesos, bias e beta ao coprocessador uma única vez. Em seguida, entra em um laço onde apresenta o menu e executa o modo escolhido pelo usuário. O acesso ao coprocessador é feito pelas funções do driver Assembly (`enviar_img`, `iniciar_inferencia`, etc.), enquanto o acesso ao controlador VGA é feito por funções em C escritas especificamente para este marco.
 
 | Função              | Responsabilidade                                                  |
 |---------------------|-------------------------------------------------------------------|

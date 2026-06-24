@@ -175,6 +175,8 @@ A aplicação é organizada em torno de um menu interativo. Ao iniciar, ela exec
 | `modo_desenho`      | Implementa o modo de desenho com o mouse                        |
 | `modo_benchmark`    | Implementa o modo de validação com métricas                     |
 
+<img width="1920" height="1080" alt="Diagrama" src="https://github.com/user-attachments/assets/c541c1b2-fe62-4361-b0ef-924e1be55a74" />
+
 ### Primitivas de Desenho no VGA
 
 A base de todo o desenho é a função `desenhar_pixel`. Ela monta a instrução de 32 bits empacotando a posição Y nos bits [28:19], a posição X nos bits [18:9] e a cor nos bits [8:0]. Em seguida, escreve essa instrução no registrador de dados (`0x50`), pulsa o sinal de enable (escreve 1 e depois 0 no `0x40`) e aguarda em polling o sinal de done (bit 0 do `0x30`) ficar em 1. A partir dessa primitiva, `desenhar_quadrado` preenche blocos com dois laços aninhados, `limpar_tela` percorre os 320×240 pixels da tela pintando tudo de preto, e `exibir_imagem` converte cada pixel da imagem MNIST em uma cor de cinza e o desenha como um bloco escalado.

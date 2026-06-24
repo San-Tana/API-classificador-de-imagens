@@ -50,7 +50,7 @@
 </h1>
 </div>
 
-  Este documento descreve o desenvolvimento do Marco 3 de um sistema para classificação de dígitos numéricos, executado na placa DE1-SoC, um SoC que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual é desenvolvida a aplicação que o usuário de fato utiliza para interagir com o sistema, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2) com algumas alterações. Para a exibição das imagens, foi integrado o IP-Core VGA disponibilizado por Maike de Oliveira, cujo repositório original pode ser encontrado em: github.com/DestinyWolf/Problema_SD_2026_1. Caso também queira detalhes sobre o driver em Assembly feito no marco 2, seu repositório pode ser encontrado em: _github.com/San-Tana/Driver-classificador-de-imagens_. Porém, cabe o aviso de que o driver utilizado no marco 3 foi alterado, o que já será detalhado logo em seguida.
+  Este documento descreve o desenvolvimento do Marco 3 de um sistema para classificação de dígitos numéricos, executado na placa DE1-SoC, um SoC que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual é desenvolvida a aplicação que o usuário de fato utiliza para interagir com o sistema, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2). Para a exibição das imagens, foi integrado o IP-Core VGA disponibilizado por Maike de Oliveira, cujo repositório original pode ser encontrado em: github.com/DestinyWolf/Problema_SD_2026_1. Caso também queira detalhes sobre o driver em Assembly feito no marco 2, seu repositório pode ser encontrado em: _github.com/San-Tana/Driver-classificador-de-imagens_. Porém, cabe o aviso de que o driver utilizado no marco 3 foi alterado, o que já será detalhado logo em seguida.
 
   O objetivo do Marco 3 é desenvolver uma aplicação em linguagem C que ofereça três modos de operação ao usuário: a classificação de uma imagem a partir de um arquivo, a classificação de um dígito desenhado na tela com o auxílio de um mouse, e um modo de benchmark que computa métricas de acurácia e desempenho. Todo o controle do controlador VGA e a leitura do mouse foram implementados diretamente na aplicação em C.
 
@@ -139,7 +139,7 @@ No Linux, tudo é tratado como arquivo, então um mouse conectado por USB é mos
 
 ### Acesso MMIO pela Linguagem C
 
-Diferente do Marco 2, onde deixamos a comunicação com o hardware no Assembly, neste marco passamos o controle da VGA direto para o código em C através de ponteiros. Para isso funcionar, o uso do `volatile` é fundamental. Como estamos lidando com registradores físicos da FPGA que mudam de estado sozinhos, o `volatile` impede que o compilador tente "otimizar" o código e ignore leituras repetidas (o que quebraria o nosso handshake de tela). A base para esses acessos vem direto do endereço virtual retornado por mapear_fpga.
+Diferente do Marco 2, onde deixamos a comunicação com o hardware no Assembly, neste marco passamos o controle da VGA direto para o código em C através de ponteiros. Para isso funcionar, o uso do `volatile` é fundamental. Como estamos lidando com registradores físicos da FPGA que mudam de estado sozinhos, o `volatile` impede que o compilador tente "otimizar" o código e ignore leituras repetidas (o que quebraria o nosso handshake de tela). A base para esses acessos vem direto do endereço virtual retornado por `mapear_fpga`.
 
 ### Decodificação de PNG com stb_image
 
@@ -153,7 +153,7 @@ Para o modo de inferência a partir de arquivo, é necessário ler imagens no fo
 </h1>
 </div>
 
-A metodologia usada no projeto foi a do PBL (Problem Based Learning), com reuniões em sessões tutoriais, onde a turma define metas e discute a solução do problema. As sessões de desenvolvimento foram fundamentais para evoluir no projeto, tirando dúvidas com o professor e os monitores. Durante as sessões tutoriais deste marco, foram debatidos tópicos como a integração do controlador VGA via PIOs, a melhor forma de exibir uma imagem pequena em uma tela maior, a leitura do mouse pelo sistema de arquivos do Linux, e estratégias para melhorar a precisão da inferência sobre desenhos feitos à mão.
+A metodologia usada no projeto foi a do PBL (Problem Based Learning), com reuniões em sessões tutoriais, onde a turma define metas e discute a solução do problema. Tiveram também sessões de desenvolvimento, que foram fundamentais para evoluir no projeto, tirando dúvidas com o professor e os monitores. Durante as sessões tutoriais deste marco, foram debatidos tópicos como a integração do controlador VGA via PIOs, a melhor forma de exibir uma imagem pequena em uma tela maior, a leitura do mouse pelo sistema de arquivos do Linux, e estratégias para melhorar a precisão da inferência sobre desenhos feitos à mão.
 
 A aplicação foi desenvolvida em linguagem C, com o driver Assembly do Marco 2 adaptado conforme descrito na seção "Modificações do Driver". Essa decisão respeita a separação de responsabilidades: o driver cuida exclusivamente da comunicação com o coprocessador ELM, enquanto a aplicação em C orquestra a leitura de arquivos, o controle do VGA, a leitura do mouse e a lógica dos três modos de operação.
 

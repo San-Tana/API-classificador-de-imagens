@@ -309,12 +309,6 @@ O throughput, por outro lado, é dominado pelo tempo de exibição da imagem na 
 
 A acurácia de 83% no dataset é consistente com o resultado do Marco 2, o que era esperado, já que a rede e seus pesos não mudaram. No modo de desenho, a acurácia é menor e mais variável: um traço feito à mão com o mouse dificilmente reproduz a distribuição de tons e a centralização das imagens originais do MNIST, e o filtro de blur, embora ajude, não elimina essa diferença.
 
-O sistema foi validado nos três modos de operação. No modo de arquivo, imagens conhecidas do dataset foram classificadas corretamente e exibidas na tela. No modo de desenho, foi possível desenhar dígitos com o mouse e obter predições, com a melhora de precisão proporcionada pelo filtro de blur. No modo de benchmark, conjuntos de imagens listados em CSV foram processados automaticamente, gerando as métricas e o log.
-
-Os testes de desempenho mostraram uma latência de inferência bastante estável, em torno de 18 ms por imagem, com desvio padrão praticamente nulo. Essa estabilidade é esperada, já que o coprocessador executa sempre a mesma sequência de operações para qualquer imagem, independentemente do seu conteúdo. O throughput observado ficou em torno de 9 a 10 imagens por segundo; esse valor inclui o tempo de exibição da imagem na tela VGA, que domina o tempo total de cada iteração, e não apenas o tempo de inferência.
-
-Quanto à acurácia, com imagens do dataset o sistema reproduz o resultado obtido no Marco 2, em torno de 83%. No modo de desenho, mesmo com o filtro de blur, a acurácia é menor e mais variável, o que é coerente com a natureza do problema: um traço feito à mão com o mouse dificilmente reproduz a distribuição de tons e a centralização das imagens originais do MNIST.
-
 <div align="center">
 <h1>
 

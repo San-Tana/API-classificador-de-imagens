@@ -12,7 +12,6 @@
   - [Entrada e Saída](#entrada-e-saída)
   - [Os Três Modos de Operação](#os-três-modos-de-operação)
   - [Interface MMIO com o Controlador VGA](#interface-mmio-com-o-controlador-vga)
-  - [Arquivos de Entrada](#arquivos-de-entrada)
 - [Fundamentação Teórica](#fundamentação-teórica)
   - [Integração do Controlador VGA](#integração-do-controlador-vga)
   - [Exibição da Imagem na Tela](#exibição-da-imagem-na-tela)
@@ -29,11 +28,15 @@
   - [Filtro de Blur](#filtro-de-blur)
   - [Inicialização e Menu](#inicialização-e-menu)
 - [Modo de Uso](#modo-de-uso)
+  - [Especificações do Ambiente](#especificações-do-ambiente)
+  - [Configuração do Ambiente](#configuração-do-ambiente)
   - [Estrutura de Diretórios](#estrutura-de-diretórios)
   - [Compilação](#compilação)
   - [Execução](#execução)
 - [Problemas Encontrados e Correções](#problemas-encontrados-e-correções)
 - [Resultados](#resultados)
+  - [Resultados Obtidos](#resultados-obtidos)
+  - [Análise dos Resultados](#análise-dos-resultados)
 - [Conclusão](#conclusão)
 - [Referências](#referências)
 
@@ -222,6 +225,17 @@ A rotina de inicialização é executada uma única vez ao abrir o programa. Ela
 </h1>
 </div>
 
+### Especificações do Ambiente
+
+O sistema foi desenvolvido e validado usando as seguintes ferramentas:
+
+| Componente / Software | Função no Projeto |
+|-----------------------|-------------------|
+| Intel Quartus Prime Lite | Síntese da FPGA e instanciação dos PIOs |
+| Linux embarcado na DE1-SoC | Sistema operacional no ARM HPS |
+| GCC (toolchain ARM) | Compilação do código C |
+| GNU Assembler (as) | Montagem do driver Assembly |
+| Biblioteca stb_image | Decodificação de PNG |
 
 ### Configuração do Ambiente
 

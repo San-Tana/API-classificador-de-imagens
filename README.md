@@ -7,6 +7,7 @@
 </div>
 
 - [Introdução](#introdução)
+- [Modificações do Driver](#modificações-do-driver)
 - [Requisitos Principais](#requisitos-principais)
   - [Entrada e Saída](#entrada-e-saída)
   - [Os Três Modos de Operação](#os-três-modos-de-operação)
@@ -46,7 +47,7 @@
 </h1>
 </div>
 
-  Este documento descreve o desenvolvimento do Marco 3 de um sistema para classificação de dígitos numéricos, executado na placa DE1-SoC, um SoC que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual a aplicação que o usuário de fato utiliza é construída, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2) com algumas alterações. O controlador VGA utilizado para a exibição das imagens foi disponibilizado por Maike de Oliveira, e seu repositório original pode ser encontrado em: _github.com/DestinyWolf/Problema_SD_2026_1_. Caso também queira detalhes sobre o driver em Assembly feito no marco 2, seu repositório pode ser encontrado em: _github.com/San-Tana/Driver-classificador-de-imagens_. Porém, cabe o aviso de que o driver utilizado no marco 3 foi alterado, o que já será detalhado logo em seguida.
+  Este documento descreve o desenvolvimento do Marco 3 de um sistema para classificação de dígitos numéricos, executado na placa DE1-SoC, um SoC que combina um processador ARM (HPS) com uma FPGA Cyclone V. Este é o marco final do projeto, no qual a aplicação que o usuário de fato utiliza para interagir com o sistema, integrando os componentes desenvolvidos nos marcos anteriores: o coprocessador ELM em Verilog (Marco 1) e o driver em Assembly ARMv7 (Marco 2) com algumas alterações. O controlador VGA utilizado para a exibição das imagens foi disponibilizado por Maike de Oliveira, e seu repositório original pode ser encontrado em: _github.com/DestinyWolf/Problema_SD_2026_1_. Caso também queira detalhes sobre o driver em Assembly feito no marco 2, seu repositório pode ser encontrado em: _github.com/San-Tana/Driver-classificador-de-imagens_. Porém, cabe o aviso de que o driver utilizado no marco 3 foi alterado, o que já será detalhado logo em seguida.
 
   O objetivo do Marco 3 é desenvolver uma aplicação em linguagem C que ofereça três modos de operação ao usuário: a classificação de uma imagem a partir de um arquivo, a classificação de um dígito desenhado na tela com o auxílio de um mouse, e um modo de benchmark que computa métricas de acurácia e desempenho. Todo o controle do controlador VGA e a leitura do mouse foram implementados diretamente na aplicação em C.
 
@@ -151,7 +152,7 @@ Para o modo de inferência a partir de arquivo, é necessário ler imagens no fo
 
 A metodologia usada no projeto foi a do PBL (Problem Based Learning), com reuniões em sessões tutoriais, onde a turma define metas e discute a solução do problema. As sessões de desenvolvimento foram fundamentais para evoluir no projeto, tirando dúvidas com o professor e os monitores. Durante as sessões tutoriais deste marco, foram debatidos tópicos como a integração do controlador VGA via PIOs, a melhor forma de exibir uma imagem pequena em uma tela maior, a leitura do mouse pelo sistema de arquivos do Linux, e estratégias para melhorar a precisão da inferência sobre desenhos feitos à mão.
 
-A aplicação foi desenvolvida em linguagem C, mantendo o driver Assembly do Marco 2 com algumas alterações, já citadas. Essa decisão respeita a separação de responsabilidades: o driver cuida exclusivamente da comunicação com o coprocessador ELM, enquanto a aplicação em C orquestra a leitura de arquivos, o controle do VGA, a leitura do mouse e a lógica dos três modos de operação.
+A aplicação foi desenvolvida em linguagem C, com o driver Assembly do Marco 2 adaptado conforme descrito na seção "Modificações do Driver". Essa decisão respeita a separação de responsabilidades: o driver cuida exclusivamente da comunicação com o coprocessador ELM, enquanto a aplicação em C orquestra a leitura de arquivos, o controle do VGA, a leitura do mouse e a lógica dos três modos de operação.
 
 <div align="center">
 <h1>
@@ -191,7 +192,7 @@ Neste modo, o usuário informa o caminho de uma imagem PNG. A aplicação lê a 
 
 ### Modo 2 — Desenho com o Mouse
 
-Este é o modo mais elaborado. A aplicação abre o dispositivo do mouse e entra em um laço lendo os pacotes de três bytes. A posição do cursor é mantida somando os deslocamentos, e é limitada à área de desenho de 224×224 pixels. Um cursor vermelho de 8×8 pixels acompanha o movimento: quando o cursor muda de célula, a célula anterior é restaurada à sua cor real e a nova é pintada de vermelho, dando a impressão de que o cursor se desloca pela tela.
+A aplicação abre o dispositivo do mouse e entra em um laço lendo os pacotes de três bytes. A posição do cursor é mantida somando os deslocamentos, e é limitada à área de desenho de 224×224 pixels. Um cursor vermelho de 8×8 pixels acompanha o movimento: quando o cursor muda de célula, a célula anterior é restaurada à sua cor real e a nova é pintada de vermelho, dando a impressão de que o cursor se desloca pela tela.
 
 Mantendo o botão esquerdo pressionado, o usuário pinta as células de branco. Para saber quais células foram pintadas, a aplicação mantém uma cópia do desenho em memória, chamada de shadow buffer. Esse buffer é necessário porque o controlador VGA só permite a escrita de pixels, não a leitura da memória de vídeo; sem ele, não haveria como recuperar o desenho para enviá-lo ao coprocessador. Ao pressionar o botão direito, o desenho é encerrado, e o conteúdo do shadow buffer (após o tratamento descrito adiante) é enviado para classificação. A saída pelo botão direito é detectada por transição, ou seja, o programa reage apenas ao momento em que o botão passa de solto para pressionado, evitando que o modo seja encerrado acidentalmente caso o botão já estivesse pressionado ao entrar.
 
@@ -202,6 +203,8 @@ Mantendo o botão esquerdo pressionado, o usuário pinta as células de branco. 
 No modo de validação, a aplicação lê um arquivo CSV de entrada onde cada linha contém o caminho de uma imagem PNG e o dígito esperado. Para cada imagem da lista, ela carrega o PNG, exibe a imagem na tela, mede o tempo da inferência e compara o resultado com o valor esperado. Ao final, calcula a acurácia, a latência média e seu desvio padrão, o tempo total e o throughput (imagens por segundo), exibindo essas métricas no terminal e salvando um arquivo CSV de log com o resultado de cada imagem e o resumo final.
 
 O desvio padrão calculado é o amostral, que divide a soma dos quadrados dos desvios por N menos 1, apropriado quando se trabalha com uma amostra. A latência de cada imagem mede apenas o tempo da inferência em si (envio da imagem e disparo), enquanto o tempo total, usado no cálculo do throughput, abrange todo o laço, incluindo a exibição na tela. A escolha de ler as imagens a partir de um CSV de entrada torna o modo flexível: para testar um conjunto diferente, basta trocar o arquivo de entrada, sem necessidade de recompilar o programa.
+
+A automação dos testes está integrada à própria aplicação, dentro do `modo_benchmark`. Basta listar as imagens no `casoteste.csv` e selecionar a opção 3 do menu, e a aplicação roda todo o conjunto, calcula as métricas e gera o CSV de log automaticamente.
 
 ### Filtro de Blur
 
@@ -219,12 +222,25 @@ A rotina de inicialização é executada uma única vez ao abrir o programa. Ela
 </h1>
 </div>
 
+
+### Configuração do Ambiente
+
+Antes de compilar e executar a aplicação, alguns passos de preparação são necessários na placa DE1-SoC:
+
+1. **Hardware conectado.** O monitor deve estar ligado à saída VGA da placa, e o mouse USB conectado a uma das portas USB host antes de inicializar o Linux embarcado. A inicialização do sistema reconhece o mouse e o expõe automaticamente em `/dev/input/mice`.
+
+2. **FPGA.** O projeto Quartus, com o coprocessador ELM e os PIOs do controlador VGA mapeados nos offsets `0x30`, `0x40` e `0x50`, precisa estar carregado na FPGA. Sem isso, os acessos MMIO do C não chegam ao hardware correto.
+
+3. **Arquivos no diretório de execução.** Os pesos da rede (`w_in_q.bin`, `b_q.bin`, `beta_q.bin`) devem estar dentro de uma pasta `data/` no mesmo diretório do executável. O arquivo `casoteste.csv` e a pasta `test/` com as imagens PNG do benchmark devem estar na raiz do projeto.
+
+4. **Acesso a /dev/mem.** A aplicação precisa abrir `/dev/mem` para mapear a ponte HPS-FPGA, o que exige privilégios de root. Por isso, a execução deve ser feita com `sudo` ou em um shell aberto com `sudo su`.
+
 ### Estrutura de Diretórios
 
 ```
 projeto/
 ├── main.c            (aplicação em C com os três modos)
-├── driver.s          (driver Assembly do Marco 2, inalterado)
+├── driver.s          (driver Assembly, com algumas alterações em relação ao marco 2)
 ├── driver.h          (constantes e protótipos das funções do driver)
 ├── stb_image.h       (biblioteca para leitura de PNG)
 ├── casoteste.csv     (lista de imagens do benchmark)
@@ -279,6 +295,20 @@ sudo su
 </h1>
 </div>
 
+### Resultados Obtidos
+
+O sistema foi validado nos três modos de operação. No modo de arquivo, imagens conhecidas do dataset foram classificadas corretamente e exibidas na tela. No modo de desenho, foi possível desenhar dígitos com o mouse e obter predições, com a melhora de precisão proporcionada pelo filtro de blur. No modo de benchmark, conjuntos de imagens listados em CSV foram processados automaticamente, gerando as métricas e o log.
+
+Os testes de desempenho mostraram uma latência de inferência bastante estável, em torno de 18 ms por imagem, com desvio padrão praticamente nulo. O throughput observado ficou em torno de 9 a 10 imagens por segundo. Quanto à acurácia, com imagens do dataset o sistema reproduz o resultado obtido no Marco 2, em torno de 83%.
+
+### Análise dos Resultados
+
+A estabilidade da latência se explica pela natureza do coprocessador: ele executa sempre a mesma sequência de operações para qualquer imagem, independentemente do conteúdo, então o tempo de cada inferência tende a ser idêntico. Isso fica claro pelo desvio padrão praticamente nulo no benchmark.
+
+O throughput, por outro lado, é dominado pelo tempo de exibição da imagem na tela VGA, e não pela inferência em si. Como cada pixel exigiria atravessar a ponte HPS-FPGA, desenhar uma imagem inteira escalada 8× leva mais tempo do que classificá-la. Isso explica por que o throughput total fica em ~9 img/s, mesmo com a inferência levando apenas 18 ms.
+
+A acurácia de 83% no dataset é consistente com o resultado do Marco 2, o que era esperado, já que a rede e seus pesos não mudaram. No modo de desenho, a acurácia é menor e mais variável: um traço feito à mão com o mouse dificilmente reproduz a distribuição de tons e a centralização das imagens originais do MNIST, e o filtro de blur, embora ajude, não elimina essa diferença.
+
 O sistema foi validado nos três modos de operação. No modo de arquivo, imagens conhecidas do dataset foram classificadas corretamente e exibidas na tela. No modo de desenho, foi possível desenhar dígitos com o mouse e obter predições, com a melhora de precisão proporcionada pelo filtro de blur. No modo de benchmark, conjuntos de imagens listados em CSV foram processados automaticamente, gerando as métricas e o log.
 
 Os testes de desempenho mostraram uma latência de inferência bastante estável, em torno de 18 ms por imagem, com desvio padrão praticamente nulo. Essa estabilidade é esperada, já que o coprocessador executa sempre a mesma sequência de operações para qualquer imagem, independentemente do seu conteúdo. O throughput observado ficou em torno de 9 a 10 imagens por segundo; esse valor inclui o tempo de exibição da imagem na tela VGA, que domina o tempo total de cada iteração, e não apenas o tempo de inferência.
@@ -299,7 +329,7 @@ O principal gargalo de desempenho encontrado está na exibição da imagem no mo
 
 Entre as melhorias tentadas, destacam-se o reforço da rotina de reset do VGA, que resolveu o problema da tela preta, e a aplicação do filtro de blur no modo de desenho, que melhorou a precisão sobre os traços manuais. Ainda assim, reconhecemos que a entrada manual permanece como a maior fonte de imprecisão do sistema, o que seria um caminho natural para trabalhos futuros, possivelmente com técnicas de centralização e normalização do desenho antes da inferência.
 
-Por fim, vale destacar a importância da metodologia PBL ao longo de todo o projeto. A construção do sistema em marcos sucessivos, partindo do coprocessador em hardware, passando pelo driver em Assembly e chegando à aplicação em C, permitiu compreender na prática como as diferentes camadas de um sistema embarcado se conectam, desde a lógica digital na FPGA até a interface com o usuário no espaço de usuário do Linux.
+Por fim, é importante mencionar a metodologia PBL ao longo de todo o projeto. A construção do sistema em marcos sucessivos, partindo do coprocessador em hardware, passando pelo driver em Assembly e chegando à aplicação em C, ajudou a entender na prática como as diferentes camadas de um sistema embarcado se conectam, da lógica digital na FPGA até a interface com o usuário no Linux.
 
 <div align="center">
 <h1>
